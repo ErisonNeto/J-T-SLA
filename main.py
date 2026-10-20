@@ -418,7 +418,7 @@ def piores_bases(
 
 @app.get("/api/piores-entregadores")
 def piores_entregadores(
-    limit: int = Query(20, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=5000),
     data_inicio: date | None = None,
     data_fim: date | None = None,
     responsavel: str | None = None,
@@ -430,6 +430,18 @@ def piores_entregadores(
         responsavel,
         rm,
     )
+
+    sql_total = f"""
+        SELECT COUNT(*)
+        FROM (
+            SELECT entregador
+            FROM entregas
+            WHERE {where}
+              AND entregador IS NOT NULL
+              AND TRIM(entregador) <> ''
+            GROUP BY entregador
+        ) t;
+    """
 
     sql = f"""
         SELECT
@@ -473,29 +485,37 @@ def piores_entregadores(
             sla ASC,
             nao_entregue DESC,
             fora_prazo DESC,
-            total DESC
+            total DESC,
+            entregador ASC
 
         LIMIT %s;
     """
 
     with get_conn() as conn:
         with conn.cursor() as cur:
+            cur.execute(sql_total, params)
+            total_entregadores = cur.fetchone()[0]
+
             cur.execute(sql, params + [limit])
             rows = cur.fetchall()
 
-    return [
-        {
-            "codigo_base": row[0],
-            "base_entrega": row[1],
-            "entregador": row[2],
-            "no_prazo": row[3],
-            "nao_entregue": row[4],
-            "fora_prazo": row[5],
-            "total": row[6],
-            "sla": float(row[7] or 0),
-        }
-        for row in rows
-    ]
+    return {
+        "total_entregadores": total_entregadores,
+        "limite": limit,
+        "itens": [
+            {
+                "codigo_base": row[0],
+                "base_entrega": row[1],
+                "entregador": row[2],
+                "no_prazo": row[3],
+                "nao_entregue": row[4],
+                "fora_prazo": row[5],
+                "total": row[6],
+                "sla": float(row[7] or 0),
+            }
+            for row in rows
+        ],
+    }
 
 
 @app.get("/api/ranking-bases")
