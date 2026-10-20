@@ -21,7 +21,6 @@
 
   <main class="container">
 
-    <!-- FILTROS -->
     <section class="filters-panel">
       <div class="filters-head">
         <div>
@@ -29,9 +28,7 @@
           <p>Refine o dashboard por período, responsável e R/M</p>
         </div>
 
-        <button id="btnLimpar" class="btn btn-light" type="button">
-          Limpar
-        </button>
+        <button id="btnLimpar" class="btn btn-light" type="button">Limpar</button>
       </div>
 
       <div class="filters-grid">
@@ -68,7 +65,6 @@
       </div>
     </section>
 
-    <!-- KPIs -->
     <section class="cards">
       <article class="card kpi-card">
         <span>SLA Geral</span>
@@ -95,14 +91,13 @@
       </article>
     </section>
 
-    <!-- EVOLUTIVO EM LARGURA TOTAL -->
+    <!-- ÚNICO PAINEL GRANDE -->
     <section class="panel evolution-panel">
       <div class="panel-title">
         <div>
           <h2>Evolução diária do SLA</h2>
           <span>Desempenho diário conforme os filtros aplicados</span>
         </div>
-
         <span class="meta-label">Linha-meta: 100%</span>
       </div>
 
@@ -111,13 +106,14 @@
       </div>
     </section>
 
-    <!-- LINHA 1: R/M + RESPONSÁVEIS -->
+    <!-- 4 QUADRADOS COMPACTOS -->
     <section class="dashboard-grid">
-      <article class="panel dashboard-card">
+
+      <article class="panel dashboard-square">
         <div class="panel-title">
           <div>
             <h2>SLA por R/M</h2>
-            <span>Ordenado do menor SLA para o maior</span>
+            <span>Menor SLA primeiro</span>
           </div>
         </div>
 
@@ -126,15 +122,15 @@
         </div>
       </article>
 
-      <article class="panel dashboard-card">
+      <article class="panel dashboard-square">
         <div class="panel-title">
           <div>
             <h2>Piores responsáveis</h2>
-            <span>Coordenadores e supervisores no mesmo ranking</span>
+            <span>Coordenadores e supervisores</span>
           </div>
         </div>
 
-        <div class="table-wrap compact-table">
+        <div class="table-wrap square-table">
           <table>
             <thead>
               <tr>
@@ -145,22 +141,20 @@
                 <th>SLA</th>
               </tr>
             </thead>
-
             <tbody id="tbodyResponsaveis"></tbody>
           </table>
         </div>
       </article>
 
-      <!-- LINHA 2: BASES + ENTREGADORES -->
-      <article class="panel dashboard-card">
+      <article class="panel dashboard-square">
         <div class="panel-title">
           <div>
             <h2>Piores bases</h2>
-            <span>Ranking operacional por base</span>
+            <span>Ranking operacional</span>
           </div>
         </div>
 
-        <div class="table-wrap compact-table">
+        <div class="table-wrap square-table">
           <table>
             <thead>
               <tr>
@@ -171,21 +165,20 @@
                 <th>SLA</th>
               </tr>
             </thead>
-
             <tbody id="tbodyBases"></tbody>
           </table>
         </div>
       </article>
 
-      <article class="panel dashboard-card">
+      <article class="panel dashboard-square">
         <div class="panel-title">
           <div>
             <h2>Piores entregadores</h2>
-            <span>Desempenho individual por base</span>
+            <span>Desempenho individual</span>
           </div>
         </div>
 
-        <div class="table-wrap compact-table">
+        <div class="table-wrap square-table">
           <table>
             <thead>
               <tr>
@@ -197,14 +190,13 @@
                 <th>SLA</th>
               </tr>
             </thead>
-
             <tbody id="tbodyEntregadores"></tbody>
           </table>
         </div>
       </article>
+
     </section>
 
-    <!-- RANKING DETALHADO -->
     <section class="panel ranking-panel">
       <div class="panel-title ranking-title">
         <div>
@@ -232,7 +224,6 @@
               <th>SLA</th>
             </tr>
           </thead>
-
           <tbody id="tbodyRankingBases"></tbody>
         </table>
       </div>
