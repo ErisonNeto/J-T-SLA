@@ -8,11 +8,17 @@ from fastapi.templating import Jinja2Templates
 
 from db import get_conn
 
+
 BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="J&T SLA Dashboard")
 
-app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+app.mount(
+    "/static",
+    StaticFiles(directory=BASE_DIR / "static"),
+    name="static",
+)
+
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
@@ -21,7 +27,7 @@ def dashboard(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={}
+        context={},
     )
 
 
@@ -62,14 +68,17 @@ def montar_filtros(
 def filtros():
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT MIN(data_sla), MAX(data_sla)
                 FROM entregas
                 WHERE data_sla IS NOT NULL;
-            """)
+                """
+            )
             datas = cur.fetchone()
 
-            cur.execute("""
+            cur.execute(
+                """
                 WITH nomes AS (
                     SELECT coordenador AS responsavel
                     FROM entregas
@@ -86,17 +95,20 @@ def filtros():
                 SELECT responsavel
                 FROM nomes
                 ORDER BY responsavel;
-            """)
-            responsaveis = [r[0] for r in cur.fetchall()]
+                """
+            )
+            responsaveis = [row[0] for row in cur.fetchall()]
 
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT DISTINCT rm
                 FROM entregas
                 WHERE rm IS NOT NULL
                   AND TRIM(rm) <> ''
                 ORDER BY rm;
-            """)
-            rms = [r[0] for r in cur.fetchall()]
+                """
+            )
+            rms = [row[0] for row in cur.fetchall()]
 
     return {
         "data_min": datas[0].isoformat() if datas and datas[0] else None,
@@ -113,16 +125,33 @@ def kpis(
     responsavel: str | None = None,
     rm: str | None = None,
 ):
-    where, params = montar_filtros(data_inicio, data_fim, responsavel, rm)
+    where, params = montar_filtros(
+        data_inicio,
+        data_fim,
+        responsavel,
+        rm,
+    )
 
     sql = f"""
         SELECT
-            COUNT(*)::bigint,
-            COUNT(*) FILTER (WHERE no_prazo)::bigint,
-            COUNT(*) FILTER (WHERE NOT no_prazo)::bigint,
-            COUNT(*) FILTER (WHERE status_sla = 'Entregue fora do prazo')::bigint,
-            COUNT(*) FILTER (WHERE status_sla = 'Não entregue')::bigint,
-            COALESCE(AVG(CASE WHEN no_prazo THEN 1.0 ELSE 0.0 END), 0)
+            COUNT(*)::bigint AS total_pedidos,
+            COUNT(*) FILTER (WHERE no_prazo)::bigint AS no_prazo,
+            COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
+            COUNT(*) FILTER (
+                WHERE status_sla = 'Entregue fora do prazo'
+            )::bigint AS entregue_fora_prazo,
+            COUNT(*) FILTER (
+                WHERE status_sla = 'Não entregue'
+            )::bigint AS nao_entregue,
+            COALESCE(
+                AVG(
+                    CASE
+                        WHEN no_prazo THEN 1.0
+                        ELSE 0.0
+                    END
+                ),
+                0
+            ) AS sla
         FROM entregas
         WHERE {where};
     """
@@ -138,7 +167,7 @@ def kpis(
         "fora_prazo": row[2],
         "entregue_fora_prazo": row[3],
         "nao_entregue": row[4],
-        "sla": float(row[5]),
+        "sla": float(row[5] or 0),
         "meta": 1.0,
     }
 
@@ -150,7 +179,12 @@ def sla_diario(
     responsavel: str | None = None,
     rm: str | None = None,
 ):
-    where, params = montar_filtros(data_inicio, data_fim, responsavel, rm)
+    where, params = montar_filtros(
+        data_inicio,
+        data_fim,
+        responsavel,
+        rm,
+    )
 
     sql = f"""
         SELECT
@@ -158,7 +192,12 @@ def sla_diario(
             COUNT(*)::bigint AS pedidos,
             COUNT(*) FILTER (WHERE no_prazo)::bigint AS no_prazo,
             COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-            AVG(CASE WHEN no_prazo THEN 1.0 ELSE 0.0 END) AS sla
+            AVG(
+                CASE
+                    WHEN no_prazo THEN 1.0
+                    ELSE 0.0
+                END
+            ) AS sla
         FROM entregas
         WHERE {where}
           AND data_sla IS NOT NULL
@@ -190,7 +229,12 @@ def sla_rm(
     responsavel: str | None = None,
     rm: str | None = None,
 ):
-    where, params = montar_filtros(data_inicio, data_fim, responsavel, rm)
+    where, params = montar_filtros(
+        data_inicio,
+        data_fim,
+        responsavel,
+        rm,
+    )
 
     sql = f"""
         SELECT
@@ -198,7 +242,12 @@ def sla_rm(
             COUNT(*)::bigint AS pedidos,
             COUNT(*) FILTER (WHERE no_prazo)::bigint AS no_prazo,
             COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-            AVG(CASE WHEN no_prazo THEN 1.0 ELSE 0.0 END) AS sla
+            AVG(
+                CASE
+                    WHEN no_prazo THEN 1.0
+                    ELSE 0.0
+                END
+            ) AS sla
         FROM entregas
         WHERE {where}
           AND rm IS NOT NULL
@@ -232,7 +281,12 @@ def piores_responsaveis(
     responsavel: str | None = None,
     rm: str | None = None,
 ):
-    where, params = montar_filtros(data_inicio, data_fim, responsavel, rm)
+    where, params = montar_filtros(
+        data_inicio,
+        data_fim,
+        responsavel,
+        rm,
+    )
 
     sql = f"""
         WITH responsaveis AS (
@@ -241,7 +295,12 @@ def piores_responsaveis(
                 'Coordenador'::text AS funcao,
                 COUNT(*)::bigint AS pedidos,
                 COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-                AVG(CASE WHEN no_prazo THEN 1.0 ELSE 0.0 END) AS sla
+                AVG(
+                    CASE
+                        WHEN no_prazo THEN 1.0
+                        ELSE 0.0
+                    END
+                ) AS sla
             FROM entregas
             WHERE {where}
               AND coordenador IS NOT NULL
@@ -255,14 +314,24 @@ def piores_responsaveis(
                 'Supervisor'::text AS funcao,
                 COUNT(*)::bigint AS pedidos,
                 COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-                AVG(CASE WHEN no_prazo THEN 1.0 ELSE 0.0 END) AS sla
+                AVG(
+                    CASE
+                        WHEN no_prazo THEN 1.0
+                        ELSE 0.0
+                    END
+                ) AS sla
             FROM entregas
             WHERE {where}
               AND supervisor IS NOT NULL
               AND TRIM(supervisor) <> ''
             GROUP BY supervisor
         )
-        SELECT responsavel, funcao, pedidos, fora_prazo, sla
+        SELECT
+            responsavel,
+            funcao,
+            pedidos,
+            fora_prazo,
+            sla
         FROM responsaveis
         ORDER BY sla ASC, fora_prazo DESC, pedidos DESC
         LIMIT %s;
@@ -270,7 +339,10 @@ def piores_responsaveis(
 
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, params + params + [limit])
+            cur.execute(
+                sql,
+                params + params + [limit],
+            )
             rows = cur.fetchall()
 
     return [
@@ -293,7 +365,12 @@ def piores_bases(
     responsavel: str | None = None,
     rm: str | None = None,
 ):
-    where, params = montar_filtros(data_inicio, data_fim, responsavel, rm)
+    where, params = montar_filtros(
+        data_inicio,
+        data_fim,
+        responsavel,
+        rm,
+    )
 
     sql = f"""
         SELECT
@@ -302,12 +379,20 @@ def piores_bases(
             coordenador,
             supervisor,
             COUNT(*)::bigint AS pedidos,
-            COUNT(*) FILTER (WHERE no_prazo)::bigint AS no_prazo,
             COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-            AVG(CASE WHEN no_prazo THEN 1.0 ELSE 0.0 END) AS sla
+            AVG(
+                CASE
+                    WHEN no_prazo THEN 1.0
+                    ELSE 0.0
+                END
+            ) AS sla
         FROM entregas
         WHERE {where}
-        GROUP BY codigo_base, base_entrega, coordenador, supervisor
+        GROUP BY
+            codigo_base,
+            base_entrega,
+            coordenador,
+            supervisor
         ORDER BY sla ASC, fora_prazo DESC, pedidos DESC
         LIMIT %s;
     """
@@ -324,8 +409,89 @@ def piores_bases(
             "coordenador": row[2],
             "supervisor": row[3],
             "pedidos": row[4],
-            "no_prazo": row[5],
-            "fora_prazo": row[6],
+            "fora_prazo": row[5],
+            "sla": float(row[6] or 0),
+        }
+        for row in rows
+    ]
+
+
+@app.get("/api/piores-entregadores")
+def piores_entregadores(
+    limit: int = Query(20, ge=1, le=200),
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+    responsavel: str | None = None,
+    rm: str | None = None,
+):
+    where, params = montar_filtros(
+        data_inicio,
+        data_fim,
+        responsavel,
+        rm,
+    )
+
+    sql = f"""
+        SELECT
+            codigo_base,
+            base_entrega,
+            entregador,
+
+            COUNT(*) FILTER (
+                WHERE status_sla = 'No prazo'
+            )::bigint AS no_prazo,
+
+            COUNT(*) FILTER (
+                WHERE status_sla = 'Não entregue'
+            )::bigint AS nao_entregue,
+
+            COUNT(*) FILTER (
+                WHERE status_sla = 'Entregue fora do prazo'
+            )::bigint AS fora_prazo,
+
+            COUNT(*)::bigint AS total,
+
+            AVG(
+                CASE
+                    WHEN no_prazo THEN 1.0
+                    ELSE 0.0
+                END
+            ) AS sla
+
+        FROM entregas
+
+        WHERE {where}
+          AND entregador IS NOT NULL
+          AND TRIM(entregador) <> ''
+
+        GROUP BY
+            codigo_base,
+            base_entrega,
+            entregador
+
+        ORDER BY
+            sla ASC,
+            nao_entregue DESC,
+            fora_prazo DESC,
+            total DESC
+
+        LIMIT %s;
+    """
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params + [limit])
+            rows = cur.fetchall()
+
+    return [
+        {
+            "codigo_base": row[0],
+            "base_entrega": row[1],
+            "entregador": row[2],
+            "no_prazo": row[3],
+            "nao_entregue": row[4],
+            "fora_prazo": row[5],
+            "total": row[6],
             "sla": float(row[7] or 0),
         }
         for row in rows
@@ -339,7 +505,12 @@ def ranking_bases(
     responsavel: str | None = None,
     rm: str | None = None,
 ):
-    where, params = montar_filtros(data_inicio, data_fim, responsavel, rm)
+    where, params = montar_filtros(
+        data_inicio,
+        data_fim,
+        responsavel,
+        rm,
+    )
 
     sql = f"""
         SELECT
@@ -349,9 +520,13 @@ def ranking_bases(
             coordenador,
             supervisor,
             COUNT(*)::bigint AS pedidos,
-            COUNT(*) FILTER (WHERE no_prazo)::bigint AS no_prazo,
             COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-            AVG(CASE WHEN no_prazo THEN 1.0 ELSE 0.0 END) AS sla
+            AVG(
+                CASE
+                    WHEN no_prazo THEN 1.0
+                    ELSE 0.0
+                END
+            ) AS sla
         FROM entregas
         WHERE {where}
         GROUP BY
@@ -376,9 +551,8 @@ def ranking_bases(
             "coordenador": row[3],
             "supervisor": row[4],
             "pedidos": row[5],
-            "no_prazo": row[6],
-            "fora_prazo": row[7],
-            "sla": float(row[8] or 0),
+            "fora_prazo": row[6],
+            "sla": float(row[7] or 0),
         }
         for row in rows
     ]
