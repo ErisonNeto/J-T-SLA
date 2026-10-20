@@ -2,6 +2,8 @@ const nf = new Intl.NumberFormat("pt-BR");
 
 let chartDiario = null;
 let chartRm = null;
+let exibindoTodosEntregadores = false;
+let cacheTodosEntregadores = [];
 
 function pct(valor) {
   return `${(Number(valor || 0) * 100).toFixed(2).replace(".", ",")}%`;
@@ -252,13 +254,19 @@ async function carregarBases() {
   }).join("");
 }
 
-async function carregarEntregadores() {
+async function carregarEntregadores(limite = 50) {
   const query = montarQuery();
   const separador = query ? "&" : "?";
 
-  const data = await getJSON(
-    `/api/piores-entregadores${query}${separador}limit=20`
+  const resposta = await getJSON(
+    `/api/piores-entregadores${query}${separador}limit=${limite}`
   );
+
+  const data = resposta.itens || [];
+  const total = Number(resposta.total_entregadores || 0);
+
+  document.getElementById("entregadoresResumo").textContent =
+    `${Math.min(limite, total)} piores de ${total} entregadores`;
 
   const tbody = document.getElementById("tbodyEntregadores");
 
@@ -272,6 +280,15 @@ async function carregarEntregadores() {
       <td class="sla-bad">${pct(item.sla)}</td>
     </tr>
   `).join("");
+
+  if (limite >= total && total > 0) {
+    exibindoTodosEntregadores = true;
+    cacheTodosEntregadores = data;
+    document.getElementById("btnVerTodosEntregadores").textContent = "Mostrar 50";
+  } else {
+    exibindoTodosEntregadores = false;
+    document.getElementById("btnVerTodosEntregadores").textContent = "Ver todos";
+  }
 }
 
 async function carregarRankingBases() {
@@ -377,7 +394,7 @@ async function carregarDashboard() {
     carregarRm(),
     carregarResponsaveis(),
     carregarBases(),
-    carregarEntregadores(),
+    carregarEntregadores(50),
     carregarRankingBases()
   ]);
 }
@@ -413,6 +430,96 @@ document.getElementById("btnBaixarRanking").addEventListener("click", async () =
     alert("Erro ao baixar o ranking.");
   }
 });
+
+
+async function verTodosEntregadores() {
+  const botao = document.getElementById("btnVerTodosEntregadores");
+
+  try {
+    botao.disabled = true;
+
+    if (exibindoTodosEntregadores) {
+      await carregarEntregadores(50);
+    } else {
+      await carregarEntregadores(5000);
+    }
+  } catch (erro) {
+    console.error(erro);
+    alert("Erro ao carregar os entregadores.");
+  } finally {
+    botao.disabled = false;
+  }
+}
+
+async function baixarEntregadoresCSV() {
+  try {
+    const query = montarQuery();
+    const separador = query ? "&" : "?";
+
+    const resposta = await getJSON(
+      `/api/piores-entregadores${query}${separador}limit=5000`
+    );
+
+    const data = resposta.itens || [];
+
+    const cabecalho = [
+      "Base",
+      "Entregador",
+      "No prazo",
+      "Não entregou",
+      "Fora do prazo",
+      "Total",
+      "SLA"
+    ];
+
+    const linhas = [
+      cabecalho.map(csvCampo).join(";"),
+      ...data.map((item) => [
+        item.base_entrega ?? item.codigo_base ?? "",
+        item.entregador ?? "",
+        item.no_prazo ?? 0,
+        item.nao_entregue ?? 0,
+        item.fora_prazo ?? 0,
+        item.total ?? 0,
+        `${(Number(item.sla || 0) * 100).toFixed(2).replace(".", ",")}%`
+      ].map(csvCampo).join(";"))
+    ];
+
+    const blob = new Blob(
+      ["\ufeff" + linhas.join("\r\n")],
+      { type: "text/csv;charset=utf-8;" }
+    );
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    const inicio = document.getElementById("dataInicio").value || "inicio";
+    const fim = document.getElementById("dataFim").value || "fim";
+
+    link.href = url;
+    link.download =
+      inicio === fim
+        ? `entregadores_${inicio}.csv`
+        : `entregadores_${inicio}_a_${fim}.csv`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+
+  } catch (erro) {
+    console.error(erro);
+    alert("Erro ao baixar o CSV dos entregadores.");
+  }
+}
+
+document
+  .getElementById("btnVerTodosEntregadores")
+  .addEventListener("click", verTodosEntregadores);
+
+document
+  .getElementById("btnBaixarEntregadores")
+  .addEventListener("click", baixarEntregadoresCSV);
 
 async function iniciar() {
   try {
