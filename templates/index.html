@@ -170,11 +170,11 @@
         </div>
       </article>
 
-      <article class="panel dashboard-square">
-        <div class="panel-title">
+      <article class="panel dashboard-square entregadores-card">
+        <div class="panel-title entregadores-title">
           <div>
             <h2>Piores entregadores</h2>
-            <span>Desempenho individual</span>
+            <span id="entregadoresResumo">50 piores entregadores</span>
           </div>
         </div>
 
@@ -192,6 +192,15 @@
             </thead>
             <tbody id="tbodyEntregadores"></tbody>
           </table>
+        </div>
+
+        <div class="entregadores-actions">
+          <button id="btnVerTodosEntregadores" class="btn btn-light btn-small" type="button">
+            Ver todos
+          </button>
+          <button id="btnBaixarEntregadores" class="btn btn-download btn-small" type="button">
+            Baixar CSV
+          </button>
         </div>
       </article>
 
