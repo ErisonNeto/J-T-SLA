@@ -377,3 +377,42 @@ tbody tr:hover {
     width: 100%;
   }
 }
+
+
+/* Piores entregadores: 50 + ações */
+.entregadores-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.entregadores-card .square-table {
+  flex: 1;
+  min-height: 0;
+}
+
+.entregadores-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.btn-small {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+#entregadoresResumo {
+  font-weight: 700;
+}
+
+@media (max-width: 700px) {
+  .entregadores-actions {
+    justify-content: stretch;
+  }
+
+  .entregadores-actions .btn {
+    flex: 1;
+  }
+}
