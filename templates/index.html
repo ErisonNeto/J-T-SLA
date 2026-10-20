@@ -1,64 +1,245 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>J&T Express | SLA Regional</title>
-<link rel="stylesheet" href="/static/style.css">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>J&T Express | SLA Regional</title>
+
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-<header class="topbar">
-  <div><div class="brand">J&T Express</div><h1>SLA Regional</h1><p>Visão executiva da performance operacional</p></div>
-  <div class="badge">Meta SLA: 100%</div>
-</header>
+  <header class="topbar">
+    <div class="topbar-copy">
+      <div class="brand">J&T Express</div>
+      <h1>SLA Regional</h1>
+      <p>Visão executiva da performance operacional</p>
+    </div>
 
-<main class="container">
-  <!-- mantenha aqui seu bloco atual de filtros e KPIs -->
+    <div class="badge">Meta SLA: 100%</div>
+  </header>
 
-  <section class="panel evolution-panel">
-    <div class="panel-title"><h2>Evolução diária do SLA</h2><span>Linha-meta: 100%</span></div>
-    <div class="evolution-chart"><canvas id="chartDiario"></canvas></div>
-  </section>
+  <main class="container">
 
-  <section class="dashboard-grid">
-    <article class="panel dashboard-card">
-      <div class="panel-title"><h2>SLA por R/M</h2><span>Menor SLA primeiro</span></div>
-      <div class="square-chart"><canvas id="chartRm"></canvas></div>
-    </article>
+    <!-- FILTROS -->
+    <section class="filters-panel">
+      <div class="filters-head">
+        <div>
+          <h2>Filtros</h2>
+          <p>Refine o dashboard por período, responsável e R/M</p>
+        </div>
 
-    <article class="panel dashboard-card">
-      <div class="panel-title"><h2>Piores responsáveis</h2><span>Coordenadores e supervisores</span></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Responsável</th><th>Função</th><th>Pedidos</th><th>Fora prazo</th><th>SLA</th></tr></thead>
-          <tbody id="tbodyResponsaveis"></tbody>
+        <button id="btnLimpar" class="btn btn-light" type="button">
+          Limpar
+        </button>
+      </div>
+
+      <div class="filters-grid">
+        <label class="filter-card">
+          <span>Data inicial</span>
+          <input id="dataInicio" type="date" />
+        </label>
+
+        <label class="filter-card">
+          <span>Data final</span>
+          <input id="dataFim" type="date" />
+        </label>
+
+        <label class="filter-card">
+          <span>Coordenador / Supervisor</span>
+          <select id="responsavel">
+            <option value="">Todos</option>
+          </select>
+        </label>
+
+        <label class="filter-card">
+          <span>R/M</span>
+          <select id="rm">
+            <option value="">Todos</option>
+          </select>
+        </label>
+
+        <div class="filter-card action-card">
+          <span>Ação</span>
+          <button id="btnAplicar" class="btn btn-primary" type="button">
+            Aplicar filtros
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPIs -->
+    <section class="cards">
+      <article class="card kpi-card">
+        <span>SLA Geral</span>
+        <strong id="slaGeral">--</strong>
+        <small>Meta operacional de 100%</small>
+      </article>
+
+      <article class="card kpi-card">
+        <span>Total de pedidos</span>
+        <strong id="totalPedidos">--</strong>
+        <small>Pedidos válidos no filtro</small>
+      </article>
+
+      <article class="card kpi-card success">
+        <span>No prazo</span>
+        <strong id="noPrazo">--</strong>
+        <small>Entregas dentro do SLA</small>
+      </article>
+
+      <article class="card kpi-card danger">
+        <span>Fora do prazo</span>
+        <strong id="foraPrazo">--</strong>
+        <small>Inclui atraso e não entregue</small>
+      </article>
+    </section>
+
+    <!-- EVOLUTIVO EM LARGURA TOTAL -->
+    <section class="panel evolution-panel">
+      <div class="panel-title">
+        <div>
+          <h2>Evolução diária do SLA</h2>
+          <span>Desempenho diário conforme os filtros aplicados</span>
+        </div>
+
+        <span class="meta-label">Linha-meta: 100%</span>
+      </div>
+
+      <div class="chart-wrap evolution-chart">
+        <canvas id="chartDiario"></canvas>
+      </div>
+    </section>
+
+    <!-- LINHA 1: R/M + RESPONSÁVEIS -->
+    <section class="dashboard-grid">
+      <article class="panel dashboard-card">
+        <div class="panel-title">
+          <div>
+            <h2>SLA por R/M</h2>
+            <span>Ordenado do menor SLA para o maior</span>
+          </div>
+        </div>
+
+        <div class="chart-wrap square-chart">
+          <canvas id="chartRm"></canvas>
+        </div>
+      </article>
+
+      <article class="panel dashboard-card">
+        <div class="panel-title">
+          <div>
+            <h2>Piores responsáveis</h2>
+            <span>Coordenadores e supervisores no mesmo ranking</span>
+          </div>
+        </div>
+
+        <div class="table-wrap compact-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Responsável</th>
+                <th>Função</th>
+                <th>Pedidos</th>
+                <th>Fora prazo</th>
+                <th>SLA</th>
+              </tr>
+            </thead>
+
+            <tbody id="tbodyResponsaveis"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <!-- LINHA 2: BASES + ENTREGADORES -->
+      <article class="panel dashboard-card">
+        <div class="panel-title">
+          <div>
+            <h2>Piores bases</h2>
+            <span>Ranking operacional por base</span>
+          </div>
+        </div>
+
+        <div class="table-wrap compact-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Base</th>
+                <th>Responsável</th>
+                <th>Pedidos</th>
+                <th>Fora prazo</th>
+                <th>SLA</th>
+              </tr>
+            </thead>
+
+            <tbody id="tbodyBases"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel dashboard-card">
+        <div class="panel-title">
+          <div>
+            <h2>Piores entregadores</h2>
+            <span>Desempenho individual por base</span>
+          </div>
+        </div>
+
+        <div class="table-wrap compact-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Base</th>
+                <th>Entregador</th>
+                <th>No prazo</th>
+                <th>Não entregou</th>
+                <th>Fora prazo</th>
+                <th>SLA</th>
+              </tr>
+            </thead>
+
+            <tbody id="tbodyEntregadores"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <!-- RANKING DETALHADO -->
+    <section class="panel ranking-panel">
+      <div class="panel-title ranking-title">
+        <div>
+          <h2>Ranking detalhado das bases</h2>
+          <span>Todas as bases conforme os filtros aplicados</span>
+        </div>
+
+        <button id="btnBaixarRanking" class="btn btn-download" type="button">
+          Baixar ranking
+        </button>
+      </div>
+
+      <div class="table-wrap ranking-wrap">
+        <table class="ranking-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Código Base</th>
+              <th>Base de entrega</th>
+              <th>R/M</th>
+              <th>Coordenador</th>
+              <th>Supervisor</th>
+              <th>Pedidos</th>
+              <th>Fora do prazo</th>
+              <th>SLA</th>
+            </tr>
+          </thead>
+
+          <tbody id="tbodyRankingBases"></tbody>
         </table>
       </div>
-    </article>
+    </section>
 
-    <article class="panel dashboard-card">
-      <div class="panel-title"><h2>Piores bases</h2><span>Ranking operacional</span></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Base</th><th>Responsável</th><th>Pedidos</th><th>Fora prazo</th><th>SLA</th></tr></thead>
-          <tbody id="tbodyBases"></tbody>
-        </table>
-      </div>
-    </article>
+  </main>
 
-    <article class="panel dashboard-card">
-      <div class="panel-title"><h2>Piores entregadores</h2><span>Desempenho individual por base</span></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Base</th><th>Entregador</th><th>No prazo</th><th>Não entregou</th><th>Fora prazo</th><th>SLA</th></tr></thead>
-          <tbody id="tbodyEntregadores"></tbody>
-        </table>
-      </div>
-    </article>
-  </section>
-</main>
-
-<script src="/static/app.js"></script>
+  <script src="/static/app.js"></script>
 </body>
 </html>
