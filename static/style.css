@@ -416,3 +416,15 @@ tbody tr:hover {
     flex: 1;
   }
 }
+
+
+/* SLA conforme a meta diária de 95% */
+.sla-good {
+  color: #0f9d58;
+  font-weight: 900;
+}
+
+.sla-bad {
+  color: #d71920;
+  font-weight: 900;
+}
