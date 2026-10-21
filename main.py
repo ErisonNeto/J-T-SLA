@@ -168,7 +168,8 @@ def kpis(
         "entregue_fora_prazo": row[3],
         "nao_entregue": row[4],
         "sla": float(row[5] or 0),
-        "meta": 1.0,
+        "meta_diaria": 0.95,
+        "meta_mensal": 0.97,
     }
 
 
