@@ -113,7 +113,7 @@ async function carregarDiario() {
         },
         {
           label: "Meta",
-          data: data.map(() => 100),
+          data: data.map(() => 95),
           borderWidth: 1.5,
           pointRadius: 0,
           borderDash: [7, 6]
