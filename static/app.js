@@ -9,6 +9,10 @@ function pct(valor) {
   return `${(Number(valor || 0) * 100).toFixed(2).replace(".", ",")}%`;
 }
 
+function classeSla(valor) {
+  return Number(valor || 0) >= 0.95 ? "sla-good" : "sla-bad";
+}
+
 function dataLocalISO(data) {
   const ano = data.getFullYear();
   const mes = String(data.getMonth() + 1).padStart(2, "0");
@@ -215,7 +219,7 @@ async function carregarResponsaveis() {
       <td>${item.funcao ?? ""}</td>
       <td>${nf.format(item.pedidos || 0)}</td>
       <td>${nf.format(item.fora_prazo || 0)}</td>
-      <td class="sla-bad">${pct(item.sla)}</td>
+      <td class="${classeSla(item.sla)}">${pct(item.sla)}</td>
     </tr>
   `).join("");
 }
@@ -248,7 +252,7 @@ async function carregarBases() {
         <td>${responsavel}</td>
         <td>${nf.format(item.pedidos || 0)}</td>
         <td>${nf.format(item.fora_prazo || 0)}</td>
-        <td class="sla-bad">${pct(item.sla)}</td>
+        <td class="${classeSla(item.sla)}">${pct(item.sla)}</td>
       </tr>
     `;
   }).join("");
@@ -277,7 +281,7 @@ async function carregarEntregadores(limite = 50) {
       <td>${nf.format(item.no_prazo || 0)}</td>
       <td>${nf.format(item.nao_entregue || 0)}</td>
       <td>${nf.format(item.fora_prazo || 0)}</td>
-      <td class="sla-bad">${pct(item.sla)}</td>
+      <td class="${classeSla(item.sla)}">${pct(item.sla)}</td>
     </tr>
   `).join("");
 
@@ -315,7 +319,7 @@ async function carregarRankingBases() {
             <div class="sla-track">
               <div class="sla-fill" style="width:${largura}%"></div>
             </div>
-            <strong>${pct(item.sla)}</strong>
+            <strong class="${classeSla(item.sla)}">${pct(item.sla)}</strong>
           </div>
         </td>
       </tr>
