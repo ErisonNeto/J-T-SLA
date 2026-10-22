@@ -457,23 +457,16 @@ async function verTodosEntregadores() {
 
 async function baixarEntregadoresCSV() {
   try {
-    const query = montarQuery();
-    const separador = query ? "&" : "?";
-
-    const resposta = await getJSON(
-      `/api/piores-entregadores${query}${separador}limit=5000`
+    const data = await getJSON(
+      `/api/entregadores-detalhes${montarQuery()}`
     );
-
-    const data = resposta.itens || [];
 
     const cabecalho = [
       "Base",
       "Entregador",
-      "No prazo",
-      "Não entregou",
-      "Fora do prazo",
-      "Total",
-      "SLA"
+      "Número da Remessa",
+      "Data SLA",
+      "Status SLA"
     ];
 
     const linhas = [
@@ -481,16 +474,14 @@ async function baixarEntregadoresCSV() {
       ...data.map((item) => [
         item.base_entrega ?? item.codigo_base ?? "",
         item.entregador ?? "",
-        item.no_prazo ?? 0,
-        item.nao_entregue ?? 0,
-        item.fora_prazo ?? 0,
-        item.total ?? 0,
-        `${(Number(item.sla || 0) * 100).toFixed(2).replace(".", ",")}%`
+        item.numero_remessa ?? "",
+        item.data_sla ?? "",
+        item.status_sla ?? ""
       ].map(csvCampo).join(";"))
     ];
 
     const blob = new Blob(
-      ["\ufeff" + linhas.join("\r\n")],
+      ["\\ufeff" + linhas.join("\\r\\n")],
       { type: "text/csv;charset=utf-8;" }
     );
 
@@ -503,8 +494,8 @@ async function baixarEntregadoresCSV() {
     link.href = url;
     link.download =
       inicio === fim
-        ? `entregadores_${inicio}.csv`
-        : `entregadores_${inicio}_a_${fim}.csv`;
+        ? `entregadores_remessas_${inicio}.csv`
+        : `entregadores_remessas_${inicio}_a_${fim}.csv`;
 
     document.body.appendChild(link);
     link.click();

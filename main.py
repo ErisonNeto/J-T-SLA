@@ -519,6 +519,59 @@ def piores_entregadores(
     }
 
 
+
+@app.get("/api/entregadores-detalhes")
+def entregadores_detalhes(
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+    responsavel: str | None = None,
+    rm: str | None = None,
+):
+    where, params = montar_filtros(
+        data_inicio,
+        data_fim,
+        responsavel,
+        rm,
+    )
+
+    sql = f"""
+        SELECT
+            codigo_base,
+            base_entrega,
+            entregador,
+            numero_remessa,
+            status_sla,
+            no_prazo,
+            data_sla
+        FROM entregas
+        WHERE {where}
+          AND entregador IS NOT NULL
+          AND TRIM(entregador) <> ''
+        ORDER BY
+            entregador ASC,
+            data_sla ASC,
+            numero_remessa ASC;
+    """
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+
+    return [
+        {
+            "codigo_base": row[0],
+            "base_entrega": row[1],
+            "entregador": row[2],
+            "numero_remessa": row[3],
+            "status_sla": row[4],
+            "no_prazo": bool(row[5]),
+            "data_sla": row[6].isoformat() if row[6] else None,
+        }
+        for row in rows
+    ]
+
+
 @app.get("/api/ranking-bases")
 def ranking_bases(
     data_inicio: date | None = None,
