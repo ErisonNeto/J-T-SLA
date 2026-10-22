@@ -2,7 +2,7 @@ from pathlib import Path
 from datetime import date
 
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -570,6 +570,93 @@ def entregadores_detalhes(
         }
         for row in rows
     ]
+
+
+
+@app.get("/api/entregadores-csv")
+def entregadores_csv(
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+    responsavel: str | None = None,
+    rm: str | None = None,
+):
+    where, params = montar_filtros(
+        data_inicio,
+        data_fim,
+        responsavel,
+        rm,
+    )
+
+    # numero_remessa é o Número da Remessa da coluna A do Excel,
+    # salvo individualmente no banco, uma linha por pacote.
+    sql = f"""
+        SELECT
+            numero_remessa,
+            base_entrega,
+            entregador,
+            data_sla,
+            status_sla
+        FROM entregas
+        WHERE {where}
+          AND numero_remessa IS NOT NULL
+          AND TRIM(numero_remessa) <> ''
+          AND entregador IS NOT NULL
+          AND TRIM(entregador) <> ''
+        ORDER BY
+            entregador ASC,
+            data_sla ASC,
+            numero_remessa ASC;
+    """
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+
+    def csv_field(value):
+        text = "" if value is None else str(value)
+        return '"' + text.replace('"', '""') + '"'
+
+    linhas = [
+        ";".join([
+            csv_field("Número da Remessa"),
+            csv_field("Base"),
+            csv_field("Entregador"),
+            csv_field("Data SLA"),
+            csv_field("Status SLA"),
+        ])
+    ]
+
+    for numero_remessa, base_entrega, entregador, data_sla, status_sla in rows:
+        linhas.append(
+            ";".join([
+                csv_field(numero_remessa),
+                csv_field(base_entrega),
+                csv_field(entregador),
+                csv_field(data_sla.isoformat() if data_sla else ""),
+                csv_field(status_sla),
+            ])
+        )
+
+    conteudo = "\ufeff" + "\r\n".join(linhas)
+
+    if data_inicio and data_fim and data_inicio == data_fim:
+        nome = f"entregadores_remessas_{data_inicio.isoformat()}.csv"
+    elif data_inicio and data_fim:
+        nome = (
+            f"entregadores_remessas_"
+            f"{data_inicio.isoformat()}_a_{data_fim.isoformat()}.csv"
+        )
+    else:
+        nome = "entregadores_remessas.csv"
+
+    return Response(
+        content=conteudo,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{nome}"'
+        },
+    )
 
 
 @app.get("/api/ranking-bases")

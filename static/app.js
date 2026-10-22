@@ -457,54 +457,43 @@ async function verTodosEntregadores() {
 
 async function baixarEntregadoresCSV() {
   try {
-    const data = await getJSON(
-      `/api/entregadores-detalhes${montarQuery()}`
-    );
+    const url = `/api/entregadores-csv${montarQuery()}`;
 
-    const cabecalho = [
-      "Base",
-      "Entregador",
-      "Número da Remessa",
-      "Data SLA",
-      "Status SLA"
-    ];
+    const response = await fetch(url, {
+      cache: "no-store"
+    });
 
-    const linhas = [
-      cabecalho.map(csvCampo).join(";"),
-      ...data.map((item) => [
-        item.base_entrega ?? item.codigo_base ?? "",
-        item.entregador ?? "",
-        item.numero_remessa ?? "",
-        item.data_sla ?? "",
-        item.status_sla ?? ""
-      ].map(csvCampo).join(";"))
-    ];
+    if (!response.ok) {
+      throw new Error(`${response.status} - ${response.statusText}`);
+    }
 
-    const blob = new Blob(
-      ["\\ufeff" + linhas.join("\\r\\n")],
-      { type: "text/csv;charset=utf-8;" }
-    );
+    const blob = await response.blob();
 
-    const url = URL.createObjectURL(blob);
+    let nomeArquivo = "entregadores_remessas.csv";
+    const disposition = response.headers.get("Content-Disposition");
+
+    if (disposition) {
+      const match = disposition.match(/filename="([^"]+)"/);
+      if (match && match[1]) {
+        nomeArquivo = match[1];
+      }
+    }
+
+    const blobUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
 
-    const inicio = document.getElementById("dataInicio").value || "inicio";
-    const fim = document.getElementById("dataFim").value || "fim";
-
-    link.href = url;
-    link.download =
-      inicio === fim
-        ? `entregadores_remessas_${inicio}.csv`
-        : `entregadores_remessas_${inicio}_a_${fim}.csv`;
+    link.href = blobUrl;
+    link.download = nomeArquivo;
 
     document.body.appendChild(link);
     link.click();
     link.remove();
-    URL.revokeObjectURL(url);
+
+    URL.revokeObjectURL(blobUrl);
 
   } catch (erro) {
     console.error(erro);
-    alert("Erro ao baixar o CSV dos entregadores.");
+    alert("Erro ao baixar o CSV das remessas dos entregadores.");
   }
 }
 
