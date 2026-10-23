@@ -5,6 +5,24 @@ let chartRm = null;
 let exibindoTodosEntregadores = false;
 let cacheTodosEntregadores = [];
 
+Chart.defaults.font.family = 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+Chart.defaults.color = "#667085";
+Chart.defaults.borderColor = "rgba(152, 162, 179, .16)";
+
+function atualizarHorarioVisualizacao() {
+  const alvo = document.getElementById("updatedAt");
+  if (!alvo) return;
+
+  const agora = new Date();
+  alvo.textContent = agora.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+
 function pct(valor) {
   return `${(Number(valor || 0) * 100).toFixed(2).replace(".", ",")}%`;
 }
@@ -110,14 +128,21 @@ async function carregarDiario() {
         {
           label: "SLA",
           data: data.map((item) => Number(item.sla || 0) * 100),
+          borderColor: "#d71920",
+          backgroundColor: "rgba(215, 25, 32, .08)",
+          pointBackgroundColor: "#ffffff",
+          pointBorderColor: "#d71920",
+          pointBorderWidth: 2,
+          fill: true,
           borderWidth: 3,
-          pointRadius: 4,
+          pointRadius: 3,
           pointHoverRadius: 6,
-          tension: 0.28
+          tension: 0.32
         },
         {
           label: "Meta",
           data: data.map(() => 95),
+          borderColor: "#159455",
           borderWidth: 1.5,
           pointRadius: 0,
           borderDash: [7, 6]
@@ -135,8 +160,16 @@ async function carregarDiario() {
         y: {
           min: 0,
           max: 100,
+          grid: {
+            color: "rgba(152, 162, 179, .14)"
+          },
           ticks: {
             callback: (valor) => `${valor}%`
+          }
+        },
+        x: {
+          grid: {
+            display: false
           }
         }
       },
@@ -170,8 +203,10 @@ async function carregarRm() {
         {
           label: "SLA",
           data: data.map((item) => Number(item.sla || 0) * 100),
+          backgroundColor: "rgba(215, 25, 32, .86)",
+          borderColor: "#d71920",
           borderWidth: 1,
-          borderRadius: 9
+          borderRadius: 7
         }
       ]
     },
@@ -183,8 +218,16 @@ async function carregarRm() {
         x: {
           min: 0,
           max: 100,
+          grid: {
+            color: "rgba(152, 162, 179, .14)"
+          },
           ticks: {
             callback: (valor) => `${valor}%`
+          }
+        },
+        y: {
+          grid: {
+            display: false
           }
         }
       },
@@ -401,6 +444,8 @@ async function carregarDashboard() {
     carregarEntregadores(50),
     carregarRankingBases()
   ]);
+
+  atualizarHorarioVisualizacao();
 }
 
 document.getElementById("btnAplicar").addEventListener("click", async () => {
