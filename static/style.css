@@ -523,8 +523,8 @@ body {
 }
 
 .square-chart {
-  height: 286px;
-  padding: 3px;
+  height: 250px;
+  padding: 3px 3px 18px;
 }
 
 /* TABLES */
