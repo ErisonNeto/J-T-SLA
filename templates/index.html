@@ -3,20 +3,50 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#d71920" />
   <title>J&T Express | SLA Regional</title>
 
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="/static/style.css?v=20261023-jt-premium" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <header class="topbar">
-    <div class="topbar-copy">
-      <div class="brand">J&T Express</div>
-      <h1>SLA Regional</h1>
-      <p>Visão executiva da performance operacional</p>
-    </div>
+    <div class="topbar-inner">
+      <div class="brand-area">
+        <div class="jt-mark" aria-label="J&T Express">
+          <span>J</span><i>&</i><span>T</span>
+        </div>
 
-    <div class="badge">Meta diária: 95% &nbsp;•&nbsp; Meta mensal: 97%</div>
+        <div class="topbar-copy">
+          <div class="eyebrow">J&T EXPRESS • OPERAÇÃO REGIONAL</div>
+          <h1>Dashboard SLA Regional</h1>
+          <p>Performance operacional, produtividade e qualidade de entrega</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="header-pill header-pill-light">
+          <span class="status-dot"></span>
+          <div>
+            <small>Status</small>
+            <strong>Monitoramento ativo</strong>
+          </div>
+        </div>
+
+        <div class="header-pill">
+          <div>
+            <small>Metas SLA</small>
+            <strong>95% diária • 97% mensal</strong>
+          </div>
+        </div>
+
+        <div class="header-updated">
+          <small>Última visualização</small>
+          <strong id="updatedAt">--</strong>
+        </div>
+      </div>
+    </div>
   </header>
 
   <main class="container">
@@ -24,11 +54,14 @@
     <section class="filters-panel">
       <div class="filters-head">
         <div>
-          <h2>Filtros</h2>
-          <p>Refine o dashboard por período, responsável e R/M</p>
+          <span class="section-kicker">CONTROLE DE VISÃO</span>
+          <h2>Filtros operacionais</h2>
+          <p>Refine o período e a gestão responsável pela operação.</p>
         </div>
 
-        <button id="btnLimpar" class="btn btn-light" type="button">Limpar</button>
+        <button id="btnLimpar" class="btn btn-light" type="button">
+          Limpar filtros
+        </button>
       </div>
 
       <div class="filters-grid">
@@ -57,7 +90,7 @@
         </label>
 
         <div class="filter-card action-card">
-          <span>Ação</span>
+          <span>Atualizar visão</span>
           <button id="btnAplicar" class="btn btn-primary" type="button">
             Aplicar filtros
           </button>
@@ -66,39 +99,55 @@
     </section>
 
     <section class="cards">
-      <article class="card kpi-card">
-        <span>SLA Geral</span>
+      <article class="card kpi-card kpi-primary">
+        <div class="kpi-head">
+          <span>SLA Geral</span>
+          <span class="kpi-tag">META 95%</span>
+        </div>
         <strong id="slaGeral">--</strong>
-        <small>Meta diária 95% • Meta mensal 97%</small>
+        <small>Performance consolidada no filtro atual</small>
       </article>
 
-      <article class="card kpi-card">
-        <span>Total de pedidos</span>
+      <article class="card kpi-card kpi-neutral">
+        <div class="kpi-head">
+          <span>Total de pedidos</span>
+          <span class="kpi-icon">∑</span>
+        </div>
         <strong id="totalPedidos">--</strong>
-        <small>Pedidos válidos no filtro</small>
+        <small>Remessas válidas analisadas</small>
       </article>
 
-      <article class="card kpi-card success">
-        <span>No prazo</span>
+      <article class="card kpi-card kpi-success">
+        <div class="kpi-head">
+          <span>No prazo</span>
+          <span class="kpi-icon">✓</span>
+        </div>
         <strong id="noPrazo">--</strong>
         <small>Entregas dentro do SLA</small>
       </article>
 
-      <article class="card kpi-card danger">
-        <span>Fora do prazo</span>
+      <article class="card kpi-card kpi-danger">
+        <div class="kpi-head">
+          <span>Fora do prazo</span>
+          <span class="kpi-icon">!</span>
+        </div>
         <strong id="foraPrazo">--</strong>
-        <small>Inclui atraso e não entregue</small>
+        <small>Atrasos e remessas não entregues</small>
       </article>
     </section>
 
-    <!-- ÚNICO PAINEL GRANDE -->
     <section class="panel evolution-panel">
       <div class="panel-title">
         <div>
+          <span class="section-kicker">TENDÊNCIA</span>
           <h2>Evolução diária do SLA</h2>
           <span>Desempenho diário conforme os filtros aplicados</span>
         </div>
-        <span class="meta-label">Linha-meta diária: 95%</span>
+
+        <div class="meta-chip">
+          <span></span>
+          Meta diária 95%
+        </div>
       </div>
 
       <div class="chart-wrap evolution-chart">
@@ -106,14 +155,14 @@
       </div>
     </section>
 
-    <!-- 4 QUADRADOS COMPACTOS -->
     <section class="dashboard-grid">
 
       <article class="panel dashboard-square">
         <div class="panel-title">
           <div>
+            <span class="section-kicker">GESTÃO</span>
             <h2>SLA por R/M</h2>
-            <span>Menor SLA primeiro</span>
+            <span>Comparativo por responsável regional</span>
           </div>
         </div>
 
@@ -125,8 +174,9 @@
       <article class="panel dashboard-square">
         <div class="panel-title">
           <div>
+            <span class="section-kicker">ATENÇÃO</span>
             <h2>Piores responsáveis</h2>
-            <span>Coordenadores e supervisores</span>
+            <span>Coordenadores e supervisores com menor SLA</span>
           </div>
         </div>
 
@@ -149,8 +199,9 @@
       <article class="panel dashboard-square">
         <div class="panel-title">
           <div>
+            <span class="section-kicker">BASES</span>
             <h2>Piores bases</h2>
-            <span>Ranking operacional</span>
+            <span>Ranking operacional por unidade</span>
           </div>
         </div>
 
@@ -173,6 +224,7 @@
       <article class="panel dashboard-square entregadores-card">
         <div class="panel-title entregadores-title">
           <div>
+            <span class="section-kicker">LAST MILE</span>
             <h2>Piores entregadores</h2>
             <span id="entregadoresResumo">50 piores entregadores</span>
           </div>
@@ -209,6 +261,7 @@
     <section class="panel ranking-panel">
       <div class="panel-title ranking-title">
         <div>
+          <span class="section-kicker">DETALHAMENTO</span>
           <h2>Ranking detalhado das bases</h2>
           <span>Todas as bases conforme os filtros aplicados</span>
         </div>
@@ -238,8 +291,12 @@
       </div>
     </section>
 
+    <footer class="dashboard-footer">
+      <span>J&T Express • SLA Regional</span>
+      <span>Dados operacionais para acompanhamento interno</span>
+    </footer>
   </main>
 
-  <script src="/static/app.js?v=20261022-remessas-coluna-a"></script>
+  <script src="/static/app.js?v=20261023-jt-premium"></script>
 </body>
 </html>
