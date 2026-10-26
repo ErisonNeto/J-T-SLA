@@ -523,8 +523,9 @@ body {
 }
 
 .square-chart {
-  height: 286px;
-  padding: 3px;
+  height: 268px;
+  padding: 4px 6px 30px;
+  overflow: visible;
 }
 
 /* TABLES */
@@ -906,3 +907,7 @@ tbody tr:hover td:first-child {
     font-size: 13px;
   }
 }
+
+/* Ajuste específico do eixo percentual SLA por R/M */
+.dashboard-square .square-chart { overflow: visible; }
+#chartRm { overflow: visible; }
