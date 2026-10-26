@@ -212,6 +212,14 @@ async function carregarRm() {
     },
     options: {
       indexAxis: "y",
+      layout: {
+        padding: {
+          top: 4,
+          right: 10,
+          bottom: 26,
+          left: 4
+        }
+      },
       responsive: true,
       maintainAspectRatio: false,
       scales: {
@@ -222,6 +230,7 @@ async function carregarRm() {
             color: "rgba(152, 162, 179, .14)"
           },
           ticks: {
+            padding: 8,
             callback: (valor) => `${valor}%`
           }
         },
