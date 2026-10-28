@@ -242,7 +242,7 @@ body {
 
 .filters-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.45fr 1fr 1fr;
+  grid-template-columns: .85fr .85fr 1.35fr .8fr 1fr 1fr .9fr;
   gap: 10px;
 }
 
@@ -908,6 +908,26 @@ tbody tr:hover td:first-child {
   }
 }
 
-/* Ajuste específico do eixo percentual SLA por R/M */
-.dashboard-square .square-chart { overflow: visible; }
-#chartRm { overflow: visible; }
+
+/* Indicador evolutivo de cumprimento do novo prazo */
+.prazo-evolution-panel {
+  margin-top: 0;
+}
+
+.prazo-evolution-panel .panel-title span:not(.section-kicker):not(.meta-chip span) {
+  max-width: 760px;
+}
+
+.dashboard-square .square-chart {
+  overflow: visible;
+}
+
+#chartRm {
+  overflow: visible;
+}
+
+@media (max-width: 1450px) {
+  .filters-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

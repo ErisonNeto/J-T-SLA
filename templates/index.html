@@ -7,7 +7,7 @@
   <title>J&T Express | SLA Regional</title>
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="/static/style.css?v=20261023-jt-premium" />
+  <link rel="stylesheet" href="/static/style.css?v=20261028-prazo" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -62,6 +62,20 @@
           <span>R/M</span>
           <select id="rm">
             <option value="">Todos</option>
+          </select>
+        </label>
+
+        <label class="filter-card">
+          <span>Base</span>
+          <select id="base">
+            <option value="">Todas as bases</option>
+          </select>
+        </label>
+
+        <label class="filter-card">
+          <span>Cidade</span>
+          <select id="cidade">
+            <option value="">Todas as cidades</option>
           </select>
         </label>
 
@@ -128,6 +142,25 @@
 
       <div class="chart-wrap evolution-chart">
         <canvas id="chartDiario"></canvas>
+      </div>
+    </section>
+
+    <section class="panel evolution-panel prazo-evolution-panel">
+      <div class="panel-title">
+        <div>
+          <span class="section-kicker">PRAZO</span>
+          <h2>Evolução diária do cumprimento de prazo</h2>
+          <span>Nova meta por rota: Novo Transit + Novo Prazo, ponderada pelo volume de pacotes</span>
+        </div>
+
+        <div class="meta-chip">
+          <span></span>
+          Meta SLA 95%
+        </div>
+      </div>
+
+      <div class="chart-wrap evolution-chart">
+        <canvas id="chartPrazo"></canvas>
       </div>
     </section>
 
@@ -273,6 +306,6 @@
     </footer>
   </main>
 
-  <script src="/static/app.js?v=20261023-jt-premium"></script>
+  <script src="/static/app.js?v=20261028-prazo"></script>
 </body>
 </html>

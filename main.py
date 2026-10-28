@@ -41,16 +41,23 @@ def montar_filtros(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
+    cidade: str | None = None,
+    campo_data: str = "data_sla",
 ):
+    campos_data_permitidos = {"data_sla", "data_prazo_novo"}
+    if campo_data not in campos_data_permitidos:
+        raise ValueError("Campo de data inválido.")
+
     where = ["1=1"]
     params = []
 
     if data_inicio:
-        where.append("data_sla >= %s")
+        where.append(f"{campo_data} >= %s")
         params.append(data_inicio)
 
     if data_fim:
-        where.append("data_sla <= %s")
+        where.append(f"{campo_data} <= %s")
         params.append(data_fim)
 
     if responsavel:
@@ -60,6 +67,14 @@ def montar_filtros(
     if rm:
         where.append("rm = %s")
         params.append(rm)
+
+    if base:
+        where.append("base_entrega = %s")
+        params.append(base)
+
+    if cidade:
+        where.append("cidade_destino = %s")
+        params.append(cidade)
 
     return " AND ".join(where), params
 
@@ -110,11 +125,35 @@ def filtros():
             )
             rms = [row[0] for row in cur.fetchall()]
 
+            cur.execute(
+                """
+                SELECT DISTINCT base_entrega
+                FROM entregas
+                WHERE base_entrega IS NOT NULL
+                  AND TRIM(base_entrega) <> ''
+                ORDER BY base_entrega;
+                """
+            )
+            bases = [row[0] for row in cur.fetchall()]
+
+            cur.execute(
+                """
+                SELECT DISTINCT cidade_destino
+                FROM entregas
+                WHERE cidade_destino IS NOT NULL
+                  AND TRIM(cidade_destino) <> ''
+                ORDER BY cidade_destino;
+                """
+            )
+            cidades = [row[0] for row in cur.fetchall()]
+
     return {
         "data_min": datas[0].isoformat() if datas and datas[0] else None,
         "data_max": datas[1].isoformat() if datas and datas[1] else None,
         "responsaveis": responsaveis,
         "rms": rms,
+        "bases": bases,
+        "cidades": cidades,
     }
 
 
@@ -124,12 +163,16 @@ def kpis(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
+    cidade: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
+        cidade,
     )
 
     sql = f"""
@@ -179,12 +222,16 @@ def sla_diario(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
+    cidade: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
+        cidade,
     )
 
     sql = f"""
@@ -223,18 +270,94 @@ def sla_diario(
     ]
 
 
+@app.get("/api/prazo-diario")
+def prazo_diario(
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+    responsavel: str | None = None,
+    rm: str | None = None,
+    base: str | None = None,
+    cidade: str | None = None,
+):
+    # Para o indicador novo, o período é a data-limite calculada
+    # pela nova meta da rota: Novo Transit + Novo Prazo.
+    where, params = montar_filtros(
+        data_inicio,
+        data_fim,
+        responsavel,
+        rm,
+        base,
+        cidade,
+        campo_data="data_prazo_novo",
+    )
+
+    sql = f"""
+        SELECT
+            data_prazo_novo,
+            COUNT(*) FILTER (
+                WHERE prazo_novo_cumprido IS NOT NULL
+            )::bigint AS avaliados,
+            COUNT(*) FILTER (
+                WHERE prazo_novo_cumprido IS TRUE
+            )::bigint AS no_prazo,
+            COUNT(*) FILTER (
+                WHERE prazo_novo_cumprido IS FALSE
+            )::bigint AS fora_prazo,
+            AVG(
+                CASE
+                    WHEN prazo_novo_cumprido IS TRUE THEN 1.0
+                    WHEN prazo_novo_cumprido IS FALSE THEN 0.0
+                    ELSE NULL
+                END
+            ) AS cumprimento,
+            AVG(prazo_meta_total) AS prazo_ponderado
+        FROM entregas
+        WHERE {where}
+          AND data_prazo_novo IS NOT NULL
+          AND prazo_meta_total IS NOT NULL
+        GROUP BY data_prazo_novo
+        HAVING COUNT(*) FILTER (
+            WHERE prazo_novo_cumprido IS NOT NULL
+        ) > 0
+        ORDER BY data_prazo_novo;
+    """
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+
+    return [
+        {
+            "data": row[0].isoformat() if row[0] else None,
+            "avaliados": row[1],
+            "no_prazo": row[2],
+            "fora_prazo": row[3],
+            "cumprimento": float(row[4] or 0),
+            # Como existe uma linha por pacote, a média abaixo já é
+            # ponderada pelo volume de pacotes de cada rota.
+            "prazo_ponderado": float(row[5] or 0),
+        }
+        for row in rows
+    ]
+
+
 @app.get("/api/sla-rm")
 def sla_rm(
     data_inicio: date | None = None,
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
+    cidade: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
+        cidade,
     )
 
     sql = f"""
@@ -281,12 +404,16 @@ def piores_responsaveis(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
+    cidade: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
+        cidade,
     )
 
     sql = f"""
@@ -365,12 +492,16 @@ def piores_bases(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
+    cidade: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
+        cidade,
     )
 
     sql = f"""
@@ -424,12 +555,16 @@ def piores_entregadores(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
+    cidade: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
+        cidade,
     )
 
     sql_total = f"""
@@ -526,12 +661,16 @@ def entregadores_detalhes(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
+    cidade: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
+        cidade,
     )
 
     sql = f"""
@@ -579,12 +718,16 @@ def entregadores_csv(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
+    cidade: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
+        cidade,
     )
 
     # numero_remessa é o Número da Remessa da coluna A do Excel,
@@ -665,12 +808,16 @@ def ranking_bases(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
+    cidade: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
+        cidade,
     )
 
     sql = f"""
