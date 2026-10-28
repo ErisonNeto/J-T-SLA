@@ -71,18 +71,45 @@ function montarQuery() {
   const dataFim = document.getElementById("dataFim").value;
   const responsavel = document.getElementById("responsavel").value;
   const rm = document.getElementById("rm").value;
-  const base = document.getElementById("base").value;
-  const cidade = document.getElementById("cidade").value;
 
   if (dataInicio) params.set("data_inicio", dataInicio);
   if (dataFim) params.set("data_fim", dataFim);
   if (responsavel) params.set("responsavel", responsavel);
   if (rm) params.set("rm", rm);
+
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+function montarQueryPrazo() {
+  const params = new URLSearchParams();
+
+  const dataInicio = document.getElementById("prazoDataInicio").value;
+  const dataFim = document.getElementById("prazoDataFim").value;
+  const responsavel = document.getElementById("prazoResponsavel").value;
+  const base = document.getElementById("prazoBase").value;
+  const cidade = document.getElementById("prazoCidade").value;
+
+  if (dataInicio) params.set("data_inicio", dataInicio);
+  if (dataFim) params.set("data_fim", dataFim);
+  if (responsavel) params.set("responsavel", responsavel);
   if (base) params.set("base", base);
   if (cidade) params.set("cidade", cidade);
 
   const query = params.toString();
   return query ? `?${query}` : "";
+}
+
+function definirDataPadraoPrazo() {
+  const fim = new Date();
+  fim.setHours(12, 0, 0, 0);
+  fim.setDate(fim.getDate() - 1);
+
+  const inicio = new Date(fim);
+  inicio.setDate(inicio.getDate() - 6);
+
+  document.getElementById("prazoDataInicio").value = dataLocalISO(inicio);
+  document.getElementById("prazoDataFim").value = dataLocalISO(fim);
 }
 
 async function carregarOpcoesFiltros() {
@@ -108,24 +135,31 @@ async function carregarOpcoesFiltros() {
     selectRm.appendChild(option);
   });
 
-  const selectBase = document.getElementById("base");
-  selectBase.innerHTML = '<option value="">Todas as bases</option>';
+  const prazoResponsavel = document.getElementById("prazoResponsavel");
+  prazoResponsavel.innerHTML = '<option value="">Todos os S/C</option>';
+  (data.responsaveis || []).forEach((nome) => {
+    const option = document.createElement("option");
+    option.value = nome;
+    option.textContent = nome;
+    prazoResponsavel.appendChild(option);
+  });
 
+  const prazoBase = document.getElementById("prazoBase");
+  prazoBase.innerHTML = '<option value="">Todas as bases</option>';
   (data.bases || []).forEach((nome) => {
     const option = document.createElement("option");
     option.value = nome;
     option.textContent = nome;
-    selectBase.appendChild(option);
+    prazoBase.appendChild(option);
   });
 
-  const selectCidade = document.getElementById("cidade");
-  selectCidade.innerHTML = '<option value="">Todas as cidades</option>';
-
+  const prazoCidade = document.getElementById("prazoCidade");
+  prazoCidade.innerHTML = '<option value="">Todas as cidades</option>';
   (data.cidades || []).forEach((nome) => {
     const option = document.createElement("option");
     option.value = nome;
     option.textContent = nome;
-    selectCidade.appendChild(option);
+    prazoCidade.appendChild(option);
   });
 }
 
@@ -214,7 +248,7 @@ async function carregarDiario() {
 }
 
 async function carregarPrazoDiario() {
-  const data = await getJSON(`/api/prazo-diario${montarQuery()}`);
+  const data = await getJSON(`/api/prazo-diario${montarQueryPrazo()}`);
 
   if (chartPrazo) {
     chartPrazo.destroy();
@@ -556,7 +590,6 @@ async function carregarDashboard() {
   await Promise.all([
     carregarKPIs(),
     carregarDiario(),
-    carregarPrazoDiario(),
     carregarRm(),
     carregarResponsaveis(),
     carregarBases(),
@@ -581,14 +614,35 @@ document.getElementById("btnLimpar").addEventListener("click", async () => {
 
   document.getElementById("responsavel").value = "";
   document.getElementById("rm").value = "";
-  document.getElementById("base").value = "";
-  document.getElementById("cidade").value = "";
 
   try {
     await carregarDashboard();
   } catch (erro) {
     console.error(erro);
     alert("Erro ao limpar os filtros.");
+  }
+});
+
+document.getElementById("btnAplicarPrazo").addEventListener("click", async () => {
+  try {
+    await carregarPrazoDiario();
+  } catch (erro) {
+    console.error(erro);
+    alert("Erro ao aplicar os filtros do cumprimento de prazo.");
+  }
+});
+
+document.getElementById("btnLimparPrazo").addEventListener("click", async () => {
+  definirDataPadraoPrazo();
+  document.getElementById("prazoResponsavel").value = "";
+  document.getElementById("prazoBase").value = "";
+  document.getElementById("prazoCidade").value = "";
+
+  try {
+    await carregarPrazoDiario();
+  } catch (erro) {
+    console.error(erro);
+    alert("Erro ao limpar os filtros do cumprimento de prazo.");
   }
 });
 
@@ -674,8 +728,12 @@ document
 async function iniciar() {
   try {
     definirDataPadraoOntem();
+    definirDataPadraoPrazo();
     await carregarOpcoesFiltros();
-    await carregarDashboard();
+    await Promise.all([
+      carregarDashboard(),
+      carregarPrazoDiario()
+    ]);
   } catch (erro) {
     console.error(erro);
     alert("Erro ao carregar o dashboard.");

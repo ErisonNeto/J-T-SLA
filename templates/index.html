@@ -7,7 +7,7 @@
   <title>J&T Express | SLA Regional</title>
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="/static/style.css?v=20261028-prazo" />
+  <link rel="stylesheet" href="/static/style.css?v=20261028-prazo-filtros-locais" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -62,20 +62,6 @@
           <span>R/M</span>
           <select id="rm">
             <option value="">Todos</option>
-          </select>
-        </label>
-
-        <label class="filter-card">
-          <span>Base</span>
-          <select id="base">
-            <option value="">Todas as bases</option>
-          </select>
-        </label>
-
-        <label class="filter-card">
-          <span>Cidade</span>
-          <select id="cidade">
-            <option value="">Todas as cidades</option>
           </select>
         </label>
 
@@ -159,7 +145,48 @@
         </div>
       </div>
 
-      <div class="chart-wrap evolution-chart">
+      <div class="prazo-local-filters">
+        <label class="prazo-filter">
+          <span>Data inicial</span>
+          <input id="prazoDataInicio" type="date" />
+        </label>
+
+        <label class="prazo-filter">
+          <span>Data final</span>
+          <input id="prazoDataFim" type="date" />
+        </label>
+
+        <label class="prazo-filter">
+          <span>S/C</span>
+          <select id="prazoResponsavel">
+            <option value="">Todos os S/C</option>
+          </select>
+        </label>
+
+        <label class="prazo-filter">
+          <span>Base</span>
+          <select id="prazoBase">
+            <option value="">Todas as bases</option>
+          </select>
+        </label>
+
+        <label class="prazo-filter">
+          <span>Cidade</span>
+          <select id="prazoCidade">
+            <option value="">Todas as cidades</option>
+          </select>
+        </label>
+
+        <div class="prazo-filter prazo-filter-actions">
+          <span>Atualizar quadro</span>
+          <div class="prazo-buttons">
+            <button id="btnLimparPrazo" class="btn btn-light" type="button">Limpar</button>
+            <button id="btnAplicarPrazo" class="btn btn-primary" type="button">Aplicar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-wrap evolution-chart prazo-chart-wrap">
         <canvas id="chartPrazo"></canvas>
       </div>
     </section>
@@ -306,6 +333,6 @@
     </footer>
   </main>
 
-  <script src="/static/app.js?v=20261028-prazo"></script>
+  <script src="/static/app.js?v=20261028-prazo-filtros-locais"></script>
 </body>
 </html>
