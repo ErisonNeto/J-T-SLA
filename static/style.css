@@ -911,3 +911,130 @@ tbody tr:hover td:first-child {
 /* Ajuste específico do eixo percentual SLA por R/M */
 .dashboard-square .square-chart { overflow: visible; }
 #chartRm { overflow: visible; }
+
+
+/* =========================================================
+   ABAS SLA / PRAZO
+   ========================================================= */
+.dashboard-tabs {
+  display: inline-flex;
+  gap: 5px;
+  padding: 5px;
+  margin: 0 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(16, 24, 40, .05);
+}
+
+.dashboard-tab {
+  height: 38px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+  transition: background .16s ease, color .16s ease, box-shadow .16s ease;
+}
+
+.dashboard-tab:hover {
+  background: #f8f9fb;
+  color: #344054;
+}
+
+.dashboard-tab.is-active {
+  color: #fff;
+  background: #d71920;
+  box-shadow: 0 6px 14px rgba(215, 25, 32, .18);
+}
+
+.dashboard-view {
+  display: none;
+}
+
+.dashboard-view.is-active {
+  display: block;
+}
+
+.prazo-filters-grid {
+  display: grid;
+  grid-template-columns: .9fr .9fr 1.25fr 1.25fr 1.25fr .9fr;
+  gap: 10px;
+}
+
+.prazo-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.prazo-chart {
+  height: 380px;
+  padding: 4px 5px 8px;
+}
+
+.prazo-panel-title {
+  align-items: center;
+}
+
+.prazo-info-panel {
+  margin-top: 14px;
+}
+
+.prazo-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.prazo-info-grid > div {
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fafbfc;
+}
+
+.prazo-info-grid strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: #344054;
+}
+
+.prazo-info-grid span {
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+@media (max-width: 1180px) {
+  .prazo-filters-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 800px) {
+  .dashboard-tabs {
+    width: 100%;
+  }
+
+  .dashboard-tab {
+    flex: 1;
+  }
+
+  .prazo-filters-grid,
+  .prazo-kpi-grid,
+  .prazo-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .prazo-panel-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .prazo-panel-title .btn {
+    width: 100%;
+  }
+}

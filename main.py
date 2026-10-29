@@ -717,3 +717,385 @@ def ranking_bases(
         }
         for row in rows
     ]
+
+
+# ============================================================
+# MÓDULO PRAZO
+# Totalmente isolado dos filtros/endpoints da Visão Geral SLA.
+# O universo de pacotes é a própria tabela entregas (mesma base SLA).
+# ============================================================
+
+def montar_filtros_prazo(
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+    responsavel: str | None = None,
+    base: str | None = None,
+    cidade: str | None = None,
+):
+    where = ["1=1"]
+    params = []
+
+    # A data do módulo Prazo usa a MESMA data_sla da Visão Geral.
+    # Isso garante que o volume do filtro bata com a base SLA.
+    if data_inicio:
+        where.append("data_sla >= %s")
+        params.append(data_inicio)
+
+    if data_fim:
+        where.append("data_sla <= %s")
+        params.append(data_fim)
+
+    if responsavel:
+        where.append("(coordenador = %s OR supervisor = %s)")
+        params.extend([responsavel, responsavel])
+
+    if base:
+        where.append("base_entrega = %s")
+        params.append(base)
+
+    if cidade:
+        where.append("cidade_destino = %s")
+        params.append(cidade)
+
+    return " AND ".join(where), params
+
+
+PRAZO_STATUS_SQL = """
+CASE
+    WHEN meta_total IS NULL
+      OR data_limite_prazo IS NULL
+      OR data_expedicao_sc IS NULL
+        THEN 'Sem meta cadastrada'
+    WHEN data_hora_entrega IS NOT NULL
+      AND data_hora_entrega::date <= data_limite_prazo
+        THEN 'Dentro da meta'
+    WHEN data_hora_entrega IS NOT NULL
+      AND data_hora_entrega::date > data_limite_prazo
+        THEN 'Fora da meta'
+    WHEN data_hora_entrega IS NULL
+      AND CURRENT_DATE > data_limite_prazo
+        THEN 'Fora da meta'
+    ELSE 'Aguardando prazo'
+END
+"""
+
+
+@app.get("/api/prazo/filtros")
+def prazo_filtros(
+    responsavel: str | None = None,
+    base: str | None = None,
+):
+    where = ["1=1"]
+    params = []
+
+    if responsavel:
+        where.append("(coordenador = %s OR supervisor = %s)")
+        params.extend([responsavel, responsavel])
+
+    if base:
+        where.append("base_entrega = %s")
+        params.append(base)
+
+    where_sql = " AND ".join(where)
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT MIN(data_sla), MAX(data_sla)
+                FROM entregas
+                WHERE data_sla IS NOT NULL;
+            """)
+            datas = cur.fetchone()
+
+            cur.execute("""
+                WITH nomes AS (
+                    SELECT coordenador AS responsavel
+                    FROM entregas
+                    WHERE coordenador IS NOT NULL
+                      AND TRIM(coordenador) <> ''
+                    UNION
+                    SELECT supervisor AS responsavel
+                    FROM entregas
+                    WHERE supervisor IS NOT NULL
+                      AND TRIM(supervisor) <> ''
+                )
+                SELECT responsavel
+                FROM nomes
+                ORDER BY responsavel;
+            """)
+            responsaveis = [row[0] for row in cur.fetchall()]
+
+            base_where = ["1=1"]
+            base_params = []
+            if responsavel:
+                base_where.append("(coordenador = %s OR supervisor = %s)")
+                base_params.extend([responsavel, responsavel])
+
+            cur.execute(
+                f"""
+                SELECT DISTINCT base_entrega
+                FROM entregas
+                WHERE {' AND '.join(base_where)}
+                  AND base_entrega IS NOT NULL
+                  AND TRIM(base_entrega) <> ''
+                ORDER BY base_entrega;
+                """,
+                base_params,
+            )
+            bases = [row[0] for row in cur.fetchall()]
+
+            cur.execute(
+                f"""
+                SELECT DISTINCT cidade_destino
+                FROM entregas
+                WHERE {where_sql}
+                  AND cidade_destino IS NOT NULL
+                  AND TRIM(cidade_destino) <> ''
+                ORDER BY cidade_destino;
+                """,
+                params,
+            )
+            cidades = [row[0] for row in cur.fetchall()]
+
+    return {
+        "data_min": datas[0].isoformat() if datas and datas[0] else None,
+        "data_max": datas[1].isoformat() if datas and datas[1] else None,
+        "responsaveis": responsaveis,
+        "bases": bases,
+        "cidades": cidades,
+    }
+
+
+@app.get("/api/prazo/kpis")
+def prazo_kpis(
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+    responsavel: str | None = None,
+    base: str | None = None,
+    cidade: str | None = None,
+):
+    where, params = montar_filtros_prazo(
+        data_inicio, data_fim, responsavel, base, cidade
+    )
+
+    sql = f"""
+        WITH dados AS (
+            SELECT
+                *,
+                {PRAZO_STATUS_SQL} AS resultado_prazo
+            FROM entregas
+            WHERE {where}
+        )
+        SELECT
+            COUNT(*)::bigint AS total_sla,
+            COUNT(*) FILTER (
+                WHERE resultado_prazo IN ('Dentro da meta', 'Fora da meta')
+            )::bigint AS avaliados,
+            COUNT(*) FILTER (
+                WHERE resultado_prazo = 'Dentro da meta'
+            )::bigint AS dentro_meta,
+            COUNT(*) FILTER (
+                WHERE resultado_prazo = 'Fora da meta'
+            )::bigint AS fora_meta,
+            COUNT(*) FILTER (
+                WHERE resultado_prazo = 'Aguardando prazo'
+            )::bigint AS aguardando,
+            COUNT(*) FILTER (
+                WHERE resultado_prazo = 'Sem meta cadastrada'
+            )::bigint AS sem_meta,
+            COALESCE(
+                AVG(
+                    CASE
+                        WHEN resultado_prazo = 'Dentro da meta' THEN 1.0
+                        WHEN resultado_prazo = 'Fora da meta' THEN 0.0
+                        ELSE NULL
+                    END
+                ),
+                0
+            ) AS cumprimento,
+            MIN(meta_total) FILTER (WHERE meta_total IS NOT NULL) AS meta_min,
+            MAX(meta_total) FILTER (WHERE meta_total IS NOT NULL) AS meta_max,
+            COUNT(DISTINCT meta_total) FILTER (
+                WHERE meta_total IS NOT NULL
+            )::bigint AS qtd_metas
+        FROM dados;
+    """
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            row = cur.fetchone()
+
+    return {
+        "total_sla": row[0],
+        "avaliados": row[1],
+        "dentro_meta": row[2],
+        "fora_meta": row[3],
+        "aguardando": row[4],
+        "sem_meta": row[5],
+        "cumprimento": float(row[6] or 0),
+        "meta_min": float(row[7]) if row[7] is not None else None,
+        "meta_max": float(row[8]) if row[8] is not None else None,
+        "qtd_metas": row[9],
+    }
+
+
+@app.get("/api/prazo/diario")
+def prazo_diario(
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+    responsavel: str | None = None,
+    base: str | None = None,
+    cidade: str | None = None,
+):
+    where, params = montar_filtros_prazo(
+        data_inicio, data_fim, responsavel, base, cidade
+    )
+
+    sql = f"""
+        WITH dados AS (
+            SELECT
+                data_sla,
+                {PRAZO_STATUS_SQL} AS resultado_prazo
+            FROM entregas
+            WHERE {where}
+              AND data_sla IS NOT NULL
+        )
+        SELECT
+            data_sla,
+            COUNT(*)::bigint AS total_sla,
+            COUNT(*) FILTER (
+                WHERE resultado_prazo IN ('Dentro da meta', 'Fora da meta')
+            )::bigint AS avaliados,
+            COUNT(*) FILTER (
+                WHERE resultado_prazo = 'Dentro da meta'
+            )::bigint AS dentro_meta,
+            COUNT(*) FILTER (
+                WHERE resultado_prazo = 'Fora da meta'
+            )::bigint AS fora_meta,
+            COALESCE(
+                AVG(
+                    CASE
+                        WHEN resultado_prazo = 'Dentro da meta' THEN 1.0
+                        WHEN resultado_prazo = 'Fora da meta' THEN 0.0
+                        ELSE NULL
+                    END
+                ),
+                0
+            ) AS cumprimento
+        FROM dados
+        GROUP BY data_sla
+        ORDER BY data_sla;
+    """
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+
+    return [
+        {
+            "data": row[0].isoformat() if row[0] else None,
+            "total_sla": row[1],
+            "avaliados": row[2],
+            "dentro_meta": row[3],
+            "fora_meta": row[4],
+            "cumprimento": float(row[5] or 0),
+        }
+        for row in rows
+    ]
+
+
+@app.get("/api/prazo/analise-csv")
+def prazo_analise_csv(
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+    responsavel: str | None = None,
+    base: str | None = None,
+    cidade: str | None = None,
+):
+    where, params = montar_filtros_prazo(
+        data_inicio, data_fim, responsavel, base, cidade
+    )
+
+    sql = f"""
+        SELECT
+            numero_remessa,
+            data_sla,
+            coordenador,
+            supervisor,
+            codigo_base,
+            base_entrega,
+            cidade_destino,
+            prazo_atual_transferencia,
+            prazo_atual_entrega,
+            meta_transit,
+            meta_entrega,
+            meta_total,
+            data_expedicao_sc,
+            data_limite_prazo,
+            data_hora_entrega,
+            prazo_real_dias,
+            {PRAZO_STATUS_SQL} AS resultado_prazo
+        FROM entregas
+        WHERE {where}
+        ORDER BY data_sla, base_entrega, cidade_destino, numero_remessa;
+    """
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+
+    def csv_field(value):
+        text = "" if value is None else str(value)
+        return '"' + text.replace('"', '""') + '"'
+
+    cabecalho = [
+        "Número da Remessa",
+        "Data SLA",
+        "Coordenador",
+        "Supervisor",
+        "Código Base",
+        "Base de entrega",
+        "Cidade Destino",
+        "Prazo atual transferência (W)",
+        "Prazo atual entrega (Y)",
+        "Nova meta Transit",
+        "Nova meta Entrega",
+        "Meta total",
+        "Expedição SC/HUB",
+        "Data limite da meta",
+        "Data/Hora entrega",
+        "Prazo real (dias)",
+        "Resultado",
+    ]
+
+    linhas = [";".join(csv_field(x) for x in cabecalho)]
+
+    for row in rows:
+        valores = list(row)
+        for idx in [1, 12, 13, 14]:
+            if valores[idx] is not None and hasattr(valores[idx], "isoformat"):
+                valores[idx] = valores[idx].isoformat()
+        linhas.append(";".join(csv_field(x) for x in valores))
+
+    conteudo = "\ufeff" + "\r\n".join(linhas)
+
+    if data_inicio and data_fim and data_inicio == data_fim:
+        nome = f"analise_prazo_{data_inicio.isoformat()}.csv"
+    elif data_inicio and data_fim:
+        nome = (
+            f"analise_prazo_{data_inicio.isoformat()}_a_"
+            f"{data_fim.isoformat()}.csv"
+        )
+    else:
+        nome = "analise_prazo.csv"
+
+    return Response(
+        content=conteudo,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{nome}"'
+        },
+    )

@@ -570,4 +570,329 @@ async function iniciar() {
   }
 }
 
+
+// ============================================================
+// ABA PRAZO - filtros e estado totalmente independentes do SLA
+// ============================================================
+
+let chartPrazo = null;
+
+function ativarAba(nome) {
+  const geralAtiva = nome === "geral";
+
+  document.getElementById("tabVisaoGeral").classList.toggle("is-active", geralAtiva);
+  document.getElementById("tabPrazo").classList.toggle("is-active", !geralAtiva);
+
+  document.getElementById("viewVisaoGeral").classList.toggle("is-active", geralAtiva);
+  document.getElementById("viewPrazo").classList.toggle("is-active", !geralAtiva);
+
+  if (!geralAtiva && chartPrazo) {
+    setTimeout(() => chartPrazo.resize(), 40);
+  }
+}
+
+function montarQueryPrazo() {
+  const params = new URLSearchParams();
+
+  const inicio = document.getElementById("prazoDataInicio").value;
+  const fim = document.getElementById("prazoDataFim").value;
+  const responsavel = document.getElementById("prazoResponsavel").value;
+  const base = document.getElementById("prazoBase").value;
+  const cidade = document.getElementById("prazoCidade").value;
+
+  if (inicio) params.set("data_inicio", inicio);
+  if (fim) params.set("data_fim", fim);
+  if (responsavel) params.set("responsavel", responsavel);
+  if (base) params.set("base", base);
+  if (cidade) params.set("cidade", cidade);
+
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+async function carregarFiltrosPrazo({ preservar = true } = {}) {
+  const selectResponsavel = document.getElementById("prazoResponsavel");
+  const selectBase = document.getElementById("prazoBase");
+  const selectCidade = document.getElementById("prazoCidade");
+
+  const valores = {
+    responsavel: preservar ? selectResponsavel.value : "",
+    base: preservar ? selectBase.value : "",
+    cidade: preservar ? selectCidade.value : ""
+  };
+
+  const params = new URLSearchParams();
+  if (valores.responsavel) params.set("responsavel", valores.responsavel);
+  if (valores.base) params.set("base", valores.base);
+
+  const sufixo = params.toString() ? `?${params.toString()}` : "";
+  const data = await getJSON(`/api/prazo/filtros${sufixo}`);
+
+  selectResponsavel.innerHTML = '<option value="">Todos</option>';
+  (data.responsaveis || []).forEach((nome) => {
+    const option = document.createElement("option");
+    option.value = nome;
+    option.textContent = nome;
+    selectResponsavel.appendChild(option);
+  });
+
+  if (valores.responsavel && (data.responsaveis || []).includes(valores.responsavel)) {
+    selectResponsavel.value = valores.responsavel;
+  }
+
+  selectBase.innerHTML = '<option value="">Todas</option>';
+  (data.bases || []).forEach((nome) => {
+    const option = document.createElement("option");
+    option.value = nome;
+    option.textContent = nome;
+    selectBase.appendChild(option);
+  });
+
+  if (valores.base && (data.bases || []).includes(valores.base)) {
+    selectBase.value = valores.base;
+  }
+
+  selectCidade.innerHTML = '<option value="">Todas</option>';
+  (data.cidades || []).forEach((nome) => {
+    const option = document.createElement("option");
+    option.value = nome;
+    option.textContent = nome;
+    selectCidade.appendChild(option);
+  });
+
+  if (valores.cidade && (data.cidades || []).includes(valores.cidade)) {
+    selectCidade.value = valores.cidade;
+  }
+
+  if (!preservar) {
+    const maxData = data.data_max || "";
+    document.getElementById("prazoDataInicio").value = maxData;
+    document.getElementById("prazoDataFim").value = maxData;
+  }
+}
+
+function formatarMetaPrazo(data) {
+  const tag = document.getElementById("prazoMetaTag");
+  const resumo = document.getElementById("prazoMetaResumo");
+
+  if (data.meta_min == null || data.meta_max == null) {
+    tag.textContent = "SEM META";
+    resumo.textContent = "Nenhuma meta cadastrada para o filtro";
+    return;
+  }
+
+  const min = Number(data.meta_min);
+  const max = Number(data.meta_max);
+
+  if (min === max) {
+    const valor = Number.isInteger(min) ? min : min.toFixed(1).replace(".", ",");
+    tag.textContent = `META ${valor}D`;
+    resumo.textContent = `Meta da rota selecionada: ${valor} dia(s)`;
+  } else {
+    const minTxt = Number.isInteger(min) ? min : min.toFixed(1).replace(".", ",");
+    const maxTxt = Number.isInteger(max) ? max : max.toFixed(1).replace(".", ",");
+    tag.textContent = `${minTxt}–${maxTxt}D`;
+    resumo.textContent = "Meta variável conforme Base + Cidade";
+  }
+}
+
+async function carregarKpisPrazo() {
+  const data = await getJSON(`/api/prazo/kpis${montarQueryPrazo()}`);
+
+  document.getElementById("prazoCumprimento").textContent = pct(data.cumprimento);
+  document.getElementById("prazoTotalSla").textContent = nf.format(data.total_sla || 0);
+  document.getElementById("prazoDentro").textContent = nf.format(data.dentro_meta || 0);
+  document.getElementById("prazoFora").textContent = nf.format(data.fora_meta || 0);
+  document.getElementById("prazoAvaliados").textContent =
+    `${nf.format(data.avaliados || 0)} avaliados`;
+
+  document.getElementById("prazoPendencias").textContent =
+    `${nf.format(data.aguardando || 0)} aguardando • ${nf.format(data.sem_meta || 0)} sem meta`;
+
+  formatarMetaPrazo(data);
+}
+
+async function carregarGraficoPrazo() {
+  const data = await getJSON(`/api/prazo/diario${montarQueryPrazo()}`);
+
+  if (chartPrazo) {
+    chartPrazo.destroy();
+  }
+
+  chartPrazo = new Chart(document.getElementById("chartPrazo"), {
+    type: "line",
+    data: {
+      labels: data.map((item) => item.data),
+      datasets: [
+        {
+          label: "Cumprimento",
+          data: data.map((item) => Number(item.cumprimento || 0) * 100),
+          borderColor: "#d71920",
+          backgroundColor: "rgba(215, 25, 32, .08)",
+          pointBackgroundColor: "#ffffff",
+          pointBorderColor: "#d71920",
+          pointBorderWidth: 2,
+          fill: true,
+          borderWidth: 3,
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          tension: 0.32
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: "index",
+        intersect: false
+      },
+      scales: {
+        y: {
+          min: 0,
+          max: 100,
+          grid: {
+            color: "rgba(152, 162, 179, .14)"
+          },
+          ticks: {
+            callback: (valor) => `${valor}%`
+          }
+        },
+        x: {
+          grid: {
+            display: false
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          position: "bottom"
+        },
+        tooltip: {
+          callbacks: {
+            label: (context) =>
+              `Cumprimento: ${Number(context.raw).toFixed(2).replace(".", ",")}%`,
+            afterBody: (items) => {
+              const item = data[items[0].dataIndex];
+              return [
+                `Pacotes SLA: ${nf.format(item.total_sla || 0)}`,
+                `Avaliados: ${nf.format(item.avaliados || 0)}`,
+                `Dentro: ${nf.format(item.dentro_meta || 0)}`,
+                `Fora: ${nf.format(item.fora_meta || 0)}`
+              ];
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+async function carregarPrazo() {
+  await Promise.all([
+    carregarKpisPrazo(),
+    carregarGraficoPrazo()
+  ]);
+}
+
+async function baixarAnalisePrazo() {
+  const url = `/api/prazo/analise-csv${montarQueryPrazo()}`;
+  const response = await fetch(url, { cache: "no-store" });
+
+  if (!response.ok) {
+    throw new Error(`${response.status} - ${response.statusText}`);
+  }
+
+  const blob = await response.blob();
+  let nomeArquivo = "analise_prazo.csv";
+
+  const disposition = response.headers.get("Content-Disposition");
+  if (disposition) {
+    const match = disposition.match(/filename="([^"]+)"/);
+    if (match && match[1]) nomeArquivo = match[1];
+  }
+
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = nomeArquivo;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(blobUrl);
+}
+
+async function iniciarPrazo() {
+  await carregarFiltrosPrazo({ preservar: false });
+  await carregarPrazo();
+}
+
+document.getElementById("tabVisaoGeral").addEventListener("click", () => {
+  ativarAba("geral");
+});
+
+document.getElementById("tabPrazo").addEventListener("click", async () => {
+  ativarAba("prazo");
+
+  if (!chartPrazo) {
+    try {
+      await iniciarPrazo();
+    } catch (erro) {
+      console.error(erro);
+      alert("Erro ao carregar a aba Prazo.");
+    }
+  }
+});
+
+document.getElementById("prazoResponsavel").addEventListener("change", async () => {
+  try {
+    document.getElementById("prazoBase").value = "";
+    document.getElementById("prazoCidade").value = "";
+    await carregarFiltrosPrazo({ preservar: true });
+  } catch (erro) {
+    console.error(erro);
+  }
+});
+
+document.getElementById("prazoBase").addEventListener("change", async () => {
+  try {
+    document.getElementById("prazoCidade").value = "";
+    await carregarFiltrosPrazo({ preservar: true });
+  } catch (erro) {
+    console.error(erro);
+  }
+});
+
+document.getElementById("btnPrazoAplicar").addEventListener("click", async () => {
+  try {
+    await carregarPrazo();
+  } catch (erro) {
+    console.error(erro);
+    alert("Erro ao aplicar os filtros de Prazo.");
+  }
+});
+
+document.getElementById("btnPrazoLimpar").addEventListener("click", async () => {
+  try {
+    document.getElementById("prazoResponsavel").value = "";
+    document.getElementById("prazoBase").value = "";
+    document.getElementById("prazoCidade").value = "";
+    await carregarFiltrosPrazo({ preservar: false });
+    await carregarPrazo();
+  } catch (erro) {
+    console.error(erro);
+    alert("Erro ao limpar os filtros de Prazo.");
+  }
+});
+
+document.getElementById("btnPrazoDownload").addEventListener("click", async () => {
+  try {
+    await baixarAnalisePrazo();
+  } catch (erro) {
+    console.error(erro);
+    alert("Erro ao baixar a análise de Prazo.");
+  }
+});
+
+
 iniciar();

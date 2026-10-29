@@ -7,7 +7,7 @@
   <title>J&T Express | SLA Regional</title>
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="/static/style.css?v=20261023-jt-premium" />
+  <link rel="stylesheet" href="/static/style.css?v=20261029-prazo-tab" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -26,6 +26,17 @@
   </header>
 
   <main class="container">
+
+    <nav class="dashboard-tabs" aria-label="Navegação do indicador">
+      <button id="tabVisaoGeral" class="dashboard-tab is-active" type="button">
+        Visão Geral
+      </button>
+      <button id="tabPrazo" class="dashboard-tab" type="button">
+        Prazo
+      </button>
+    </nav>
+
+    <div id="viewVisaoGeral" class="dashboard-view is-active">
 
     <section class="filters-panel">
       <div class="filters-head">
@@ -267,12 +278,144 @@
       </div>
     </section>
 
+
+    </div>
+
+    <div id="viewPrazo" class="dashboard-view">
+      <section class="filters-panel prazo-filters-panel">
+        <div class="filters-head">
+          <div>
+            <span class="section-kicker">ANÁLISE DE PRAZO</span>
+            <h2>Filtros do Prazo</h2>
+            <p>Filtros exclusivos desta aba. Não alteram a Visão Geral do SLA.</p>
+          </div>
+
+          <button id="btnPrazoLimpar" class="btn btn-light" type="button">
+            Limpar filtros
+          </button>
+        </div>
+
+        <div class="prazo-filters-grid">
+          <label class="filter-card">
+            <span>Data inicial</span>
+            <input id="prazoDataInicio" type="date" />
+          </label>
+
+          <label class="filter-card">
+            <span>Data final</span>
+            <input id="prazoDataFim" type="date" />
+          </label>
+
+          <label class="filter-card">
+            <span>S/C</span>
+            <select id="prazoResponsavel">
+              <option value="">Todos</option>
+            </select>
+          </label>
+
+          <label class="filter-card">
+            <span>Base</span>
+            <select id="prazoBase">
+              <option value="">Todas</option>
+            </select>
+          </label>
+
+          <label class="filter-card">
+            <span>Cidade</span>
+            <select id="prazoCidade">
+              <option value="">Todas</option>
+            </select>
+          </label>
+
+          <div class="filter-card action-card">
+            <span>Atualizar análise</span>
+            <button id="btnPrazoAplicar" class="btn btn-primary" type="button">
+              Aplicar
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="cards prazo-kpi-grid">
+        <article class="card kpi-card kpi-primary">
+          <div class="kpi-head">
+            <span>Cumprimento</span>
+            <span class="kpi-tag" id="prazoMetaTag">META VARIÁVEL</span>
+          </div>
+          <strong id="prazoCumprimento">--</strong>
+          <small id="prazoMetaResumo">Meta conforme Base + Cidade</small>
+        </article>
+
+        <article class="card kpi-card kpi-neutral">
+          <div class="kpi-head">
+            <span>Pacotes SLA</span>
+            <span class="kpi-icon">∑</span>
+          </div>
+          <strong id="prazoTotalSla">--</strong>
+          <small>Mesmo universo da base SLA no filtro</small>
+        </article>
+
+        <article class="card kpi-card kpi-success">
+          <div class="kpi-head">
+            <span>Dentro da meta</span>
+            <span class="kpi-icon">✓</span>
+          </div>
+          <strong id="prazoDentro">--</strong>
+          <small id="prazoAvaliados">-- avaliados</small>
+        </article>
+
+        <article class="card kpi-card kpi-danger">
+          <div class="kpi-head">
+            <span>Fora da meta</span>
+            <span class="kpi-icon">!</span>
+          </div>
+          <strong id="prazoFora">--</strong>
+          <small id="prazoPendencias">-- aguardando • -- sem meta</small>
+        </article>
+      </section>
+
+      <section class="panel evolution-panel">
+        <div class="panel-title prazo-panel-title">
+          <div>
+            <span class="section-kicker">EVOLUÇÃO</span>
+            <h2>Evolução diária do cumprimento de prazo</h2>
+            <span>Percentual ponderado por pacote usando a meta da rota Base + Cidade</span>
+          </div>
+
+          <button id="btnPrazoDownload" class="btn btn-download" type="button">
+            Baixar análise
+          </button>
+        </div>
+
+        <div class="chart-wrap prazo-chart">
+          <canvas id="chartPrazo"></canvas>
+        </div>
+      </section>
+
+      <section class="panel prazo-info-panel">
+        <div class="prazo-info-grid">
+          <div>
+            <strong>Fonte operacional</strong>
+            <span>Mesma base de SLA: remessa, S/C, base, cidade e datas.</span>
+          </div>
+          <div>
+            <strong>Meta</strong>
+            <span>Novo Transit + Novo Prazo, variável por Base + Cidade.</span>
+          </div>
+          <div>
+            <strong>Download</strong>
+            <span>Uma linha por remessa com Dentro/Fora/Aguardando/Sem meta.</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
     <footer class="dashboard-footer">
       <span>J&T Express • SLA Regional</span>
       <span>Dados operacionais para acompanhamento interno</span>
     </footer>
   </main>
 
-  <script src="/static/app.js?v=20261023-jt-premium"></script>
+  <script src="/static/app.js?v=20261029-prazo-tab"></script>
 </body>
 </html>
