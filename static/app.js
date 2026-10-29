@@ -161,11 +161,22 @@ async function carregarDiario() {
         y: {
           min: 0,
           max: 100,
+          position: "left",
           grid: {
             color: "rgba(152, 162, 179, .14)"
           },
           ticks: {
             callback: (valor) => `${valor}%`
+          }
+        },
+        yMeta: {
+          beginAtZero: true,
+          position: "right",
+          grid: {
+            drawOnChartArea: false
+          },
+          ticks: {
+            callback: (valor) => `${valor}d`
           }
         },
         x: {
@@ -690,10 +701,10 @@ async function carregarKpisPrazo() {
   document.getElementById("prazoDentro").textContent = nf.format(data.dentro_meta || 0);
   document.getElementById("prazoFora").textContent = nf.format(data.fora_meta || 0);
   document.getElementById("prazoAvaliados").textContent =
-    `${nf.format(data.avaliados || 0)} avaliados`;
+    `${nf.format(data.avaliados || 0)} avaliados • ${nf.format(data.com_meta || 0)} com meta`;
 
   document.getElementById("prazoPendencias").textContent =
-    `${nf.format(data.aguardando || 0)} aguardando • ${nf.format(data.sem_meta || 0)} sem meta`;
+    `${nf.format(data.sem_dados_reais || 0)} sem dados reais • ${nf.format(data.sem_meta || 0)} sem meta`;
 
   formatarMetaPrazo(data);
 }
@@ -711,7 +722,7 @@ async function carregarGraficoPrazo() {
       labels: data.map((item) => item.data),
       datasets: [
         {
-          label: "Cumprimento",
+          label: "Cumprimento real",
           data: data.map((item) =>
             item.cumprimento == null ? null : Number(item.cumprimento) * 100
           ),
@@ -725,7 +736,26 @@ async function carregarGraficoPrazo() {
           pointRadius: 3,
           pointHoverRadius: 6,
           tension: 0.32,
-          spanGaps: false
+          spanGaps: false,
+          yAxisID: "y"
+        },
+        {
+          label: "Meta média da Base (dias)",
+          data: data.map((item) =>
+            item.meta_media == null ? null : Number(item.meta_media)
+          ),
+          borderColor: "#111827",
+          backgroundColor: "transparent",
+          pointBackgroundColor: "#ffffff",
+          pointBorderColor: "#111827",
+          pointBorderWidth: 2,
+          fill: false,
+          borderWidth: 2,
+          pointRadius: 2,
+          pointHoverRadius: 5,
+          tension: 0.25,
+          spanGaps: false,
+          yAxisID: "yMeta"
         }
       ]
     },
@@ -740,11 +770,22 @@ async function carregarGraficoPrazo() {
         y: {
           min: 0,
           max: 100,
+          position: "left",
           grid: {
             color: "rgba(152, 162, 179, .14)"
           },
           ticks: {
             callback: (valor) => `${valor}%`
+          }
+        },
+        yMeta: {
+          beginAtZero: true,
+          position: "right",
+          grid: {
+            drawOnChartArea: false
+          },
+          ticks: {
+            callback: (valor) => `${valor}d`
           }
         },
         x: {
@@ -759,15 +800,24 @@ async function carregarGraficoPrazo() {
         },
         tooltip: {
           callbacks: {
-            label: (context) =>
-              `Cumprimento: ${Number(context.raw).toFixed(2).replace(".", ",")}%`,
+            label: (context) => {
+              if (context.raw == null) return "";
+              if (context.dataset.yAxisID === "yMeta") {
+                return `Meta média: ${Number(context.raw).toFixed(2).replace(".", ",")} dia(s)`;
+              }
+              return `Cumprimento real: ${Number(context.raw).toFixed(2).replace(".", ",")}%`;
+            },
             afterBody: (items) => {
               const item = data[items[0].dataIndex];
               return [
                 `Pacotes SLA: ${nf.format(item.total_sla || 0)}`,
                 `Avaliados: ${nf.format(item.avaliados || 0)}`,
                 `Dentro: ${nf.format(item.dentro_meta || 0)}`,
-                `Fora: ${nf.format(item.fora_meta || 0)}`
+                `Fora: ${nf.format(item.fora_meta || 0)}`,
+                `Com meta: ${nf.format(item.com_meta || 0)}`,
+                item.meta_media == null
+                  ? "Meta média: sem cadastro"
+                  : `Meta média: ${Number(item.meta_media).toFixed(2).replace(".", ",")} dia(s)`
               ];
             }
           }

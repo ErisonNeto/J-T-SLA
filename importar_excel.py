@@ -547,10 +547,103 @@ def upsert(base):
         conn.commit()
 
 
+def retropreencher_metas_historicas():
+    """
+    Preenche Cidade da Base + metas em registros antigos que já existem
+    no Supabase, mesmo quando os arquivos Excel antigos não estão mais disponíveis.
+
+    O vínculo é feito por base_entrega existente no banco.
+    As datas operacionais antigas NÃO são inventadas nem alteradas.
+    """
+    metas = carregar_metas()
+
+    mapa = {}
+    for row in metas.itertuples(index=False):
+        mapa[row._base_chave] = (
+            None if pd.isna(row.cidade_base) else str(row.cidade_base),
+            None if pd.isna(row.meta_transit) else float(row.meta_transit),
+            None if pd.isna(row.meta_entrega) else float(row.meta_entrega),
+            None if pd.isna(row.meta_total) else float(row.meta_total),
+        )
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT DISTINCT base_entrega
+                FROM entregas
+                WHERE base_entrega IS NOT NULL
+                  AND TRIM(base_entrega) <> '';
+            """)
+            bases_banco = [row[0] for row in cur.fetchall()]
+
+            atualizacoes = []
+            sem_match = []
+
+            for base_nome in bases_banco:
+                chave = normalizar_base(base_nome)
+                meta = mapa.get(chave)
+
+                if not meta:
+                    sem_match.append(base_nome)
+                    continue
+
+                cidade_base, meta_transit, meta_entrega, meta_total = meta
+
+                atualizacoes.append((
+                    cidade_base,
+                    meta_transit,
+                    meta_entrega,
+                    meta_total,
+                    base_nome,
+                ))
+
+            if atualizacoes:
+                cur.executemany("""
+                    UPDATE entregas
+                    SET
+                        cidade_base = %s,
+                        meta_transit = %s,
+                        meta_entrega = %s,
+                        meta_total = %s
+                    WHERE base_entrega = %s;
+                """, atualizacoes)
+
+            cur.execute("""
+                SELECT
+                    COUNT(*)::bigint,
+                    COUNT(meta_total)::bigint,
+                    COUNT(cidade_base)::bigint
+                FROM entregas;
+            """)
+            total, com_meta, com_cidade = cur.fetchone()
+
+        conn.commit()
+
+    print(
+        "Retropreenchimento histórico concluído: "
+        f"{com_meta:,}/{total:,} registros com meta "
+        f"({(com_meta / total * 100 if total else 0):.1f}%)."
+    )
+    print(
+        f"Registros com Cidade da Base: {com_cidade:,}/{total:,}."
+    )
+
+    if sem_match:
+        print(
+            f"Bases históricas sem correspondência de meta: {len(sem_match):,}"
+        )
+        for nome in sorted(sem_match)[:20]:
+            print(f" - {nome}")
+        if len(sem_match) > 20:
+            print(f" ... +{len(sem_match) - 20} base(s)")
+
+
+
 if __name__ == "__main__":
     df = carregar()
     print(
         f"Registros válidos após filtros e deduplicação: {len(df):,}"
     )
     upsert(df)
+    retropreencher_metas_historicas()
     print("Carga concluída.")

@@ -336,7 +336,7 @@
             <span class="kpi-tag" id="prazoMetaTag">META VARIÁVEL</span>
           </div>
           <strong id="prazoCumprimento">--</strong>
-          <small id="prazoMetaResumo">Meta conforme Base + Cidade</small>
+          <small id="prazoMetaResumo">Meta de referência conforme a Base</small>
         </article>
 
         <article class="card kpi-card kpi-neutral">
@@ -371,8 +371,8 @@
         <div class="panel-title prazo-panel-title">
           <div>
             <span class="section-kicker">EVOLUÇÃO</span>
-            <h2>Evolução diária do cumprimento de prazo</h2>
-            <span>Percentual ponderado por pacote usando a meta da própria Base</span>
+            <h2>Evolução diária do prazo</h2>
+            <span>Cumprimento real quando disponível + meta média planejada das Bases do dia</span>
           </div>
 
           <button id="btnPrazoDownload" class="btn btn-download" type="button">
@@ -389,7 +389,7 @@
         <div class="prazo-info-grid">
           <div>
             <strong>Fonte operacional</strong>
-            <span>Mesma base de SLA: remessa, S/C, base, cidade e datas.</span>
+            <span>Mesma base do SLA: remessa, S/C e Base. O histórico antigo é reaproveitado do Supabase.</span>
           </div>
           <div>
             <strong>Meta</strong>
@@ -397,7 +397,7 @@
           </div>
           <div>
             <strong>Download</strong>
-            <span>Uma linha por remessa com Dentro/Fora/Aguardando/Sem meta.</span>
+            <span>Uma linha por remessa. O histórico recebe a meta da Base sem inventar datas operacionais.</span>
           </div>
         </div>
       </section>
@@ -409,6 +409,6 @@
     </footer>
   </main>
 
-  <script src="/static/app.js?v=20261029-prazo-tab"></script>
+  <script src="/static/app.js?v=20261029-prazo-historico"></script>
 </body>
 </html>

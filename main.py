@@ -869,6 +869,16 @@ def prazo_kpis(
             COUNT(*) FILTER (
                 WHERE resultado_prazo = 'Sem meta cadastrada'
             )::bigint AS sem_meta,
+            COUNT(*) FILTER (
+                WHERE meta_total IS NOT NULL
+            )::bigint AS com_meta,
+            COUNT(*) FILTER (
+                WHERE meta_total IS NOT NULL
+                  AND (
+                    data_expedicao_sc IS NULL
+                    OR data_limite_prazo IS NULL
+                  )
+            )::bigint AS sem_dados_reais,
             AVG(
                 CASE
                     WHEN resultado_prazo = 'Dentro da meta' THEN 1.0
@@ -876,6 +886,7 @@ def prazo_kpis(
                     ELSE NULL
                 END
             ) AS cumprimento,
+            AVG(meta_total) FILTER (WHERE meta_total IS NOT NULL) AS meta_media,
             MIN(meta_total) FILTER (WHERE meta_total IS NOT NULL) AS meta_min,
             MAX(meta_total) FILTER (WHERE meta_total IS NOT NULL) AS meta_max,
             COUNT(DISTINCT meta_total) FILTER (
@@ -896,10 +907,13 @@ def prazo_kpis(
         "fora_meta": row[3],
         "aguardando": row[4],
         "sem_meta": row[5],
-        "cumprimento": float(row[6]) if row[1] and row[6] is not None else None,
-        "meta_min": float(row[7]) if row[7] is not None else None,
-        "meta_max": float(row[8]) if row[8] is not None else None,
-        "qtd_metas": row[9],
+        "com_meta": row[6],
+        "sem_dados_reais": row[7],
+        "cumprimento": float(row[8]) if row[1] and row[8] is not None else None,
+        "meta_media": float(row[9]) if row[9] is not None else None,
+        "meta_min": float(row[10]) if row[10] is not None else None,
+        "meta_max": float(row[11]) if row[11] is not None else None,
+        "qtd_metas": row[12],
     }
 
 
@@ -935,6 +949,12 @@ def prazo_diario(
             COUNT(*) FILTER (
                 WHERE resultado_prazo = 'Fora da meta'
             )::bigint AS fora_meta,
+            COUNT(*) FILTER (
+                WHERE meta_total IS NOT NULL
+            )::bigint AS com_meta,
+            AVG(meta_total) FILTER (
+                WHERE meta_total IS NOT NULL
+            ) AS meta_media,
             AVG(
                 CASE
                     WHEN resultado_prazo = 'Dentro da meta' THEN 1.0
@@ -959,7 +979,9 @@ def prazo_diario(
             "avaliados": row[2],
             "dentro_meta": row[3],
             "fora_meta": row[4],
-            "cumprimento": float(row[5]) if row[2] and row[5] is not None else None,
+            "com_meta": row[5],
+            "meta_media": float(row[6]) if row[6] is not None else None,
+            "cumprimento": float(row[7]) if row[2] and row[7] is not None else None,
         }
         for row in rows
     ]
