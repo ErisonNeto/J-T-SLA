@@ -598,13 +598,11 @@ function montarQueryPrazo() {
   const fim = document.getElementById("prazoDataFim").value;
   const responsavel = document.getElementById("prazoResponsavel").value;
   const base = document.getElementById("prazoBase").value;
-  const cidade = document.getElementById("prazoCidade").value;
 
   if (inicio) params.set("data_inicio", inicio);
   if (fim) params.set("data_fim", fim);
   if (responsavel) params.set("responsavel", responsavel);
   if (base) params.set("base", base);
-  if (cidade) params.set("cidade", cidade);
 
   const query = params.toString();
   return query ? `?${query}` : "";
@@ -613,12 +611,10 @@ function montarQueryPrazo() {
 async function carregarFiltrosPrazo({ preservar = true } = {}) {
   const selectResponsavel = document.getElementById("prazoResponsavel");
   const selectBase = document.getElementById("prazoBase");
-  const selectCidade = document.getElementById("prazoCidade");
 
   const valores = {
     responsavel: preservar ? selectResponsavel.value : "",
-    base: preservar ? selectBase.value : "",
-    cidade: preservar ? selectCidade.value : ""
+    base: preservar ? selectBase.value : ""
   };
 
   const params = new URLSearchParams();
@@ -652,17 +648,6 @@ async function carregarFiltrosPrazo({ preservar = true } = {}) {
     selectBase.value = valores.base;
   }
 
-  selectCidade.innerHTML = '<option value="">Todas</option>';
-  (data.cidades || []).forEach((nome) => {
-    const option = document.createElement("option");
-    option.value = nome;
-    option.textContent = nome;
-    selectCidade.appendChild(option);
-  });
-
-  if (valores.cidade && (data.cidades || []).includes(valores.cidade)) {
-    selectCidade.value = valores.cidade;
-  }
 
   if (!preservar) {
     const maxData = data.data_max || "";
@@ -687,19 +672,19 @@ function formatarMetaPrazo(data) {
   if (min === max) {
     const valor = Number.isInteger(min) ? min : min.toFixed(1).replace(".", ",");
     tag.textContent = `META ${valor}D`;
-    resumo.textContent = `Meta da rota selecionada: ${valor} dia(s)`;
+    resumo.textContent = `Meta da base selecionada: ${valor} dia(s)`;
   } else {
     const minTxt = Number.isInteger(min) ? min : min.toFixed(1).replace(".", ",");
     const maxTxt = Number.isInteger(max) ? max : max.toFixed(1).replace(".", ",");
     tag.textContent = `${minTxt}–${maxTxt}D`;
-    resumo.textContent = "Meta variável conforme Base + Cidade";
+    resumo.textContent = "Meta variável conforme a Base selecionada";
   }
 }
 
 async function carregarKpisPrazo() {
   const data = await getJSON(`/api/prazo/kpis${montarQueryPrazo()}`);
 
-  document.getElementById("prazoCumprimento").textContent = pct(data.cumprimento);
+  document.getElementById("prazoCumprimento").textContent = data.cumprimento == null ? "Sem dados" : pct(data.cumprimento);
   document.getElementById("prazoTotalSla").textContent = nf.format(data.total_sla || 0);
   document.getElementById("prazoDentro").textContent = nf.format(data.dentro_meta || 0);
   document.getElementById("prazoFora").textContent = nf.format(data.fora_meta || 0);
@@ -847,7 +832,6 @@ document.getElementById("tabPrazo").addEventListener("click", async () => {
 document.getElementById("prazoResponsavel").addEventListener("change", async () => {
   try {
     document.getElementById("prazoBase").value = "";
-    document.getElementById("prazoCidade").value = "";
     await carregarFiltrosPrazo({ preservar: true });
   } catch (erro) {
     console.error(erro);
@@ -856,7 +840,6 @@ document.getElementById("prazoResponsavel").addEventListener("change", async () 
 
 document.getElementById("prazoBase").addEventListener("change", async () => {
   try {
-    document.getElementById("prazoCidade").value = "";
     await carregarFiltrosPrazo({ preservar: true });
   } catch (erro) {
     console.error(erro);
@@ -876,7 +859,6 @@ document.getElementById("btnPrazoLimpar").addEventListener("click", async () => 
   try {
     document.getElementById("prazoResponsavel").value = "";
     document.getElementById("prazoBase").value = "";
-    document.getElementById("prazoCidade").value = "";
     await carregarFiltrosPrazo({ preservar: false });
     await carregarPrazo();
   } catch (erro) {

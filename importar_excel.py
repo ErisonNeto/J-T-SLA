@@ -105,6 +105,17 @@ def extrair_turno_num(v):
 
 
 def carregar_metas():
+    """
+    Define uma única Cidade da Base e uma única meta por Base.
+
+    Regra:
+    - usa o arquivo Ajuste de Prazos somente como referência;
+    - para cada Base, escolhe a rota com menor Meta Total
+      (Novo Transit + Novo Prazo);
+    - em empate, mantém a primeira ocorrência do arquivo.
+
+    Isso evita depender de Cidade Destino do pacote.
+    """
     arquivo = localizar_prazos()
 
     prazos = pd.read_excel(
@@ -128,7 +139,7 @@ def carregar_metas():
         )
 
     prazos["_base_chave"] = prazos["Base de entrega"].map(normalizar_base)
-    prazos["_cidade_chave"] = prazos["Nome da cidade"].map(normalizar_cidade)
+    prazos["cidade_base"] = prazos["Nome da cidade"].astype("string").str.strip()
 
     prazos["meta_transit"] = pd.to_numeric(
         prazos["Novo Transit"], errors="coerce"
@@ -140,37 +151,39 @@ def carregar_metas():
         prazos["meta_transit"] + prazos["meta_entrega"]
     )
 
+    prazos = prazos.dropna(
+        subset=["_base_chave", "meta_total"]
+    ).copy()
+
+    # menor prazo da base = referência da própria cidade/base
     metas = (
-        prazos[
-            [
-                "_base_chave",
-                "_cidade_chave",
-                "meta_transit",
-                "meta_entrega",
-                "meta_total",
-            ]
-        ]
-        .dropna(subset=["_base_chave", "_cidade_chave"])
-        .drop_duplicates(
-            subset=["_base_chave", "_cidade_chave"],
-            keep="last",
+        prazos.sort_values(
+            ["_base_chave", "meta_total"],
+            kind="stable",
         )
+        .drop_duplicates("_base_chave", keep="first")
+        [[
+            "_base_chave",
+            "cidade_base",
+            "meta_transit",
+            "meta_entrega",
+            "meta_total",
+        ]]
     )
 
     print(
-        f"Metas Base + Cidade carregadas: {len(metas):,} "
+        f"Metas por Base carregadas: {len(metas):,} "
         f"({arquivo.name})"
     )
 
     return metas
-
 
 def garantir_colunas_banco():
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 ALTER TABLE entregas
-                ADD COLUMN IF NOT EXISTS cidade_destino text;
+                ADD COLUMN IF NOT EXISTS cidade_base text;
             """)
             cur.execute("""
                 ALTER TABLE entregas
@@ -210,12 +223,12 @@ def garantir_colunas_banco():
             """)
 
             cur.execute("""
-                CREATE INDEX IF NOT EXISTS idx_entregas_cidade_destino
-                ON entregas(cidade_destino);
+                CREATE INDEX IF NOT EXISTS idx_entregas_cidade_base
+                ON entregas(cidade_base);
             """)
             cur.execute("""
-                CREATE INDEX IF NOT EXISTS idx_entregas_base_cidade
-                ON entregas(base_entrega, cidade_destino);
+                CREATE INDEX IF NOT EXISTS idx_entregas_base_cidadebase
+                ON entregas(base_entrega, cidade_base);
             """)
 
         conn.commit()
@@ -389,13 +402,11 @@ def carregar():
     # Dados da ABA PRAZO
     # A fonte operacional continua sendo o próprio SLA.
     # ==========================
-    if "Cidade Destino" not in base.columns:
-        raise KeyError(
-            "A base SLA não possui a coluna 'Cidade Destino'."
-        )
-
-    base["cidade_destino"] = limpar_nome(base["Cidade Destino"])
-
+    # ==========================
+    # Dados da ABA PRAZO
+    # Não usa Cidade Destino.
+    # A meta é definida pela própria Base.
+    # ==========================
     base["prazo_atual_transferencia"] = pd.to_numeric(
         base.get("Prazo SC Destino-> Base de Entrega"),
         errors="coerce",
@@ -415,20 +426,19 @@ def carregar():
     )
 
     base["_base_chave"] = base["Base de entrega"].map(normalizar_base)
-    base["_cidade_chave"] = base["cidade_destino"].map(normalizar_cidade)
 
     metas = carregar_metas()
 
     base = base.merge(
         metas,
-        on=["_base_chave", "_cidade_chave"],
+        on="_base_chave",
         how="left",
         validate="m:1",
     )
 
     cobertura = int(base["meta_total"].notna().sum())
     print(
-        "Cobertura das novas metas Base + Cidade: "
+        "Cobertura das metas por Base: "
         f"{cobertura:,}/{len(base):,} "
         f"({(cobertura / len(base) * 100 if len(base) else 0):.1f}%)"
     )
@@ -465,7 +475,7 @@ def upsert(base):
         "turno_rit": base["turno_rit"].astype(int),
 
         # Campos adicionais para a aba Prazo
-        "cidade_destino": base["cidade_destino"].astype("string"),
+        "cidade_base": base["cidade_base"].astype("string"),
         "prazo_atual_transferencia": base["prazo_atual_transferencia"],
         "prazo_atual_entrega": base["prazo_atual_entrega"],
         "meta_transit": base["meta_transit"],
@@ -493,7 +503,7 @@ def upsert(base):
             supervisor,
             entregador,
             turno_rit,
-            cidade_destino,
+            cidade_base,
             prazo_atual_transferencia,
             prazo_atual_entrega,
             meta_transit,
@@ -519,7 +529,7 @@ def upsert(base):
             supervisor = EXCLUDED.supervisor,
             entregador = EXCLUDED.entregador,
             turno_rit = EXCLUDED.turno_rit,
-            cidade_destino = EXCLUDED.cidade_destino,
+            cidade_base = EXCLUDED.cidade_base,
             prazo_atual_transferencia = EXCLUDED.prazo_atual_transferencia,
             prazo_atual_entrega = EXCLUDED.prazo_atual_entrega,
             meta_transit = EXCLUDED.meta_transit,

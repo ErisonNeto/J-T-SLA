@@ -730,7 +730,6 @@ def montar_filtros_prazo(
     data_fim: date | None = None,
     responsavel: str | None = None,
     base: str | None = None,
-    cidade: str | None = None,
 ):
     where = ["1=1"]
     params = []
@@ -752,10 +751,6 @@ def montar_filtros_prazo(
     if base:
         where.append("base_entrega = %s")
         params.append(base)
-
-    if cidade:
-        where.append("cidade_destino = %s")
-        params.append(cidade)
 
     return " AND ".join(where), params
 
@@ -783,21 +778,7 @@ END
 @app.get("/api/prazo/filtros")
 def prazo_filtros(
     responsavel: str | None = None,
-    base: str | None = None,
 ):
-    where = ["1=1"]
-    params = []
-
-    if responsavel:
-        where.append("(coordenador = %s OR supervisor = %s)")
-        params.extend([responsavel, responsavel])
-
-    if base:
-        where.append("base_entrega = %s")
-        params.append(base)
-
-    where_sql = " AND ".join(where)
-
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -825,44 +806,30 @@ def prazo_filtros(
             """)
             responsaveis = [row[0] for row in cur.fetchall()]
 
-            base_where = ["1=1"]
-            base_params = []
+            params = []
+            filtro = "1=1"
             if responsavel:
-                base_where.append("(coordenador = %s OR supervisor = %s)")
-                base_params.extend([responsavel, responsavel])
+                filtro += " AND (coordenador = %s OR supervisor = %s)"
+                params.extend([responsavel, responsavel])
 
             cur.execute(
                 f"""
                 SELECT DISTINCT base_entrega
                 FROM entregas
-                WHERE {' AND '.join(base_where)}
+                WHERE {filtro}
                   AND base_entrega IS NOT NULL
                   AND TRIM(base_entrega) <> ''
                 ORDER BY base_entrega;
                 """,
-                base_params,
-            )
-            bases = [row[0] for row in cur.fetchall()]
-
-            cur.execute(
-                f"""
-                SELECT DISTINCT cidade_destino
-                FROM entregas
-                WHERE {where_sql}
-                  AND cidade_destino IS NOT NULL
-                  AND TRIM(cidade_destino) <> ''
-                ORDER BY cidade_destino;
-                """,
                 params,
             )
-            cidades = [row[0] for row in cur.fetchall()]
+            bases = [row[0] for row in cur.fetchall()]
 
     return {
         "data_min": datas[0].isoformat() if datas and datas[0] else None,
         "data_max": datas[1].isoformat() if datas and datas[1] else None,
         "responsaveis": responsaveis,
         "bases": bases,
-        "cidades": cidades,
     }
 
 
@@ -872,10 +839,9 @@ def prazo_kpis(
     data_fim: date | None = None,
     responsavel: str | None = None,
     base: str | None = None,
-    cidade: str | None = None,
 ):
     where, params = montar_filtros_prazo(
-        data_inicio, data_fim, responsavel, base, cidade
+        data_inicio, data_fim, responsavel, base
     )
 
     sql = f"""
@@ -933,7 +899,7 @@ def prazo_kpis(
         "fora_meta": row[3],
         "aguardando": row[4],
         "sem_meta": row[5],
-        "cumprimento": float(row[6] or 0),
+        "cumprimento": float(row[6]) if row[1] and row[6] is not None else None,
         "meta_min": float(row[7]) if row[7] is not None else None,
         "meta_max": float(row[8]) if row[8] is not None else None,
         "qtd_metas": row[9],
@@ -946,10 +912,9 @@ def prazo_diario(
     data_fim: date | None = None,
     responsavel: str | None = None,
     base: str | None = None,
-    cidade: str | None = None,
 ):
     where, params = montar_filtros_prazo(
-        data_inicio, data_fim, responsavel, base, cidade
+        data_inicio, data_fim, responsavel, base
     )
 
     sql = f"""
@@ -1012,10 +977,9 @@ def prazo_analise_csv(
     data_fim: date | None = None,
     responsavel: str | None = None,
     base: str | None = None,
-    cidade: str | None = None,
 ):
     where, params = montar_filtros_prazo(
-        data_inicio, data_fim, responsavel, base, cidade
+        data_inicio, data_fim, responsavel, base
     )
 
     sql = f"""
@@ -1026,7 +990,7 @@ def prazo_analise_csv(
             supervisor,
             codigo_base,
             base_entrega,
-            cidade_destino,
+            cidade_base,
             prazo_atual_transferencia,
             prazo_atual_entrega,
             meta_transit,
@@ -1058,7 +1022,7 @@ def prazo_analise_csv(
         "Supervisor",
         "Código Base",
         "Base de entrega",
-        "Cidade Destino",
+        "Cidade da Base",
         "Prazo atual transferência (W)",
         "Prazo atual entrega (Y)",
         "Nova meta Transit",
