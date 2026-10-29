@@ -137,7 +137,8 @@ async function carregarDiario() {
           borderWidth: 3,
           pointRadius: 3,
           pointHoverRadius: 6,
-          tension: 0.32
+          tension: 0.32,
+          spanGaps: false
         },
         {
           label: "Meta",
@@ -711,7 +712,9 @@ async function carregarGraficoPrazo() {
       datasets: [
         {
           label: "Cumprimento",
-          data: data.map((item) => Number(item.cumprimento || 0) * 100),
+          data: data.map((item) =>
+            item.cumprimento == null ? null : Number(item.cumprimento) * 100
+          ),
           borderColor: "#d71920",
           backgroundColor: "rgba(215, 25, 32, .08)",
           pointBackgroundColor: "#ffffff",
@@ -721,7 +724,8 @@ async function carregarGraficoPrazo() {
           borderWidth: 3,
           pointRadius: 3,
           pointHoverRadius: 6,
-          tension: 0.32
+          tension: 0.32,
+          spanGaps: false
         }
       ]
     },

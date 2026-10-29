@@ -869,15 +869,12 @@ def prazo_kpis(
             COUNT(*) FILTER (
                 WHERE resultado_prazo = 'Sem meta cadastrada'
             )::bigint AS sem_meta,
-            COALESCE(
-                AVG(
-                    CASE
-                        WHEN resultado_prazo = 'Dentro da meta' THEN 1.0
-                        WHEN resultado_prazo = 'Fora da meta' THEN 0.0
-                        ELSE NULL
-                    END
-                ),
-                0
+            AVG(
+                CASE
+                    WHEN resultado_prazo = 'Dentro da meta' THEN 1.0
+                    WHEN resultado_prazo = 'Fora da meta' THEN 0.0
+                    ELSE NULL
+                END
             ) AS cumprimento,
             MIN(meta_total) FILTER (WHERE meta_total IS NOT NULL) AS meta_min,
             MAX(meta_total) FILTER (WHERE meta_total IS NOT NULL) AS meta_max,
@@ -938,15 +935,12 @@ def prazo_diario(
             COUNT(*) FILTER (
                 WHERE resultado_prazo = 'Fora da meta'
             )::bigint AS fora_meta,
-            COALESCE(
-                AVG(
-                    CASE
-                        WHEN resultado_prazo = 'Dentro da meta' THEN 1.0
-                        WHEN resultado_prazo = 'Fora da meta' THEN 0.0
-                        ELSE NULL
-                    END
-                ),
-                0
+            AVG(
+                CASE
+                    WHEN resultado_prazo = 'Dentro da meta' THEN 1.0
+                    WHEN resultado_prazo = 'Fora da meta' THEN 0.0
+                    ELSE NULL
+                END
             ) AS cumprimento
         FROM dados
         GROUP BY data_sla
@@ -965,7 +959,7 @@ def prazo_diario(
             "avaliados": row[2],
             "dentro_meta": row[3],
             "fora_meta": row[4],
-            "cumprimento": float(row[5] or 0),
+            "cumprimento": float(row[5]) if row[2] and row[5] is not None else None,
         }
         for row in rows
     ]
