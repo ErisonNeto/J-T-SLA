@@ -242,7 +242,7 @@ body {
 
 .filters-grid {
   display: grid;
-  grid-template-columns: .85fr .85fr 1.35fr .8fr 1fr 1fr .9fr;
+  grid-template-columns: 1fr 1fr 1.45fr 1fr 1fr;
   gap: 10px;
 }
 
@@ -908,106 +908,6 @@ tbody tr:hover td:first-child {
   }
 }
 
-
-/* Indicador evolutivo de cumprimento do novo prazo */
-.prazo-evolution-panel {
-  margin-top: 0;
-}
-
-.prazo-evolution-panel .panel-title span:not(.section-kicker):not(.meta-chip span) {
-  max-width: 760px;
-}
-
-.dashboard-square .square-chart {
-  overflow: visible;
-}
-
-#chartRm {
-  overflow: visible;
-}
-
-@media (max-width: 1450px) {
-  .filters-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-
-/* Filtros exclusivos do indicador de cumprimento de prazo */
-.prazo-local-filters {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1.25fr 1.35fr 1.35fr 1.2fr;
-  gap: 10px;
-  margin: 8px 0 14px;
-  padding: 12px;
-  border: 1px solid #e4e7ec;
-  border-radius: 14px;
-  background: #f8f9fb;
-}
-
-.prazo-filter {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.prazo-filter > span {
-  color: #667085;
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: .055em;
-  text-transform: uppercase;
-}
-
-.prazo-filter input,
-.prazo-filter select {
-  width: 100%;
-  height: 38px;
-  padding: 0 10px;
-  border: 1px solid #d9dee7;
-  border-radius: 9px;
-  outline: none;
-  background: #fff;
-  color: #131820;
-  font: inherit;
-  font-size: 11.5px;
-}
-
-.prazo-filter input:focus,
-.prazo-filter select:focus {
-  border-color: #d71920;
-  box-shadow: 0 0 0 3px rgba(215,25,32,.06);
-}
-
-.prazo-filter-actions {
-  justify-content: space-between;
-}
-
-.prazo-buttons {
-  display: grid;
-  grid-template-columns: .8fr 1fr;
-  gap: 7px;
-}
-
-.prazo-buttons .btn {
-  height: 38px;
-  padding: 0 10px;
-  font-size: 11px;
-}
-
-.prazo-chart-wrap {
-  height: 330px;
-}
-
-@media (max-width: 1300px) {
-  .prazo-local-filters {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 760px) {
-  .prazo-local-filters {
-    grid-template-columns: 1fr;
-  }
-}
+/* Ajuste específico do eixo percentual SLA por R/M */
+.dashboard-square .square-chart { overflow: visible; }
+#chartRm { overflow: visible; }

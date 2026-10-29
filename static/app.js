@@ -2,7 +2,6 @@ const nf = new Intl.NumberFormat("pt-BR");
 
 let chartDiario = null;
 let chartRm = null;
-let chartPrazo = null;
 let exibindoTodosEntregadores = false;
 let cacheTodosEntregadores = [];
 
@@ -81,37 +80,6 @@ function montarQuery() {
   return query ? `?${query}` : "";
 }
 
-function montarQueryPrazo() {
-  const params = new URLSearchParams();
-
-  const dataInicio = document.getElementById("prazoDataInicio").value;
-  const dataFim = document.getElementById("prazoDataFim").value;
-  const responsavel = document.getElementById("prazoResponsavel").value;
-  const base = document.getElementById("prazoBase").value;
-  const cidade = document.getElementById("prazoCidade").value;
-
-  if (dataInicio) params.set("data_inicio", dataInicio);
-  if (dataFim) params.set("data_fim", dataFim);
-  if (responsavel) params.set("responsavel", responsavel);
-  if (base) params.set("base", base);
-  if (cidade) params.set("cidade", cidade);
-
-  const query = params.toString();
-  return query ? `?${query}` : "";
-}
-
-function definirDataPadraoPrazo() {
-  const fim = new Date();
-  fim.setHours(12, 0, 0, 0);
-  fim.setDate(fim.getDate() - 1);
-
-  const inicio = new Date(fim);
-  inicio.setDate(inicio.getDate() - 6);
-
-  document.getElementById("prazoDataInicio").value = dataLocalISO(inicio);
-  document.getElementById("prazoDataFim").value = dataLocalISO(fim);
-}
-
 async function carregarOpcoesFiltros() {
   const data = await getJSON("/api/filtros");
 
@@ -133,33 +101,6 @@ async function carregarOpcoesFiltros() {
     option.value = nome;
     option.textContent = nome;
     selectRm.appendChild(option);
-  });
-
-  const prazoResponsavel = document.getElementById("prazoResponsavel");
-  prazoResponsavel.innerHTML = '<option value="">Todos os S/C</option>';
-  (data.responsaveis || []).forEach((nome) => {
-    const option = document.createElement("option");
-    option.value = nome;
-    option.textContent = nome;
-    prazoResponsavel.appendChild(option);
-  });
-
-  const prazoBase = document.getElementById("prazoBase");
-  prazoBase.innerHTML = '<option value="">Todas as bases</option>';
-  (data.bases || []).forEach((nome) => {
-    const option = document.createElement("option");
-    option.value = nome;
-    option.textContent = nome;
-    prazoBase.appendChild(option);
-  });
-
-  const prazoCidade = document.getElementById("prazoCidade");
-  prazoCidade.innerHTML = '<option value="">Todas as cidades</option>';
-  (data.cidades || []).forEach((nome) => {
-    const option = document.createElement("option");
-    option.value = nome;
-    option.textContent = nome;
-    prazoCidade.appendChild(option);
   });
 }
 
@@ -247,95 +188,6 @@ async function carregarDiario() {
   });
 }
 
-async function carregarPrazoDiario() {
-  const data = await getJSON(`/api/prazo-diario${montarQueryPrazo()}`);
-
-  if (chartPrazo) {
-    chartPrazo.destroy();
-  }
-
-  chartPrazo = new Chart(document.getElementById("chartPrazo"), {
-    type: "line",
-    data: {
-      labels: data.map((item) => item.data),
-      datasets: [
-        {
-          label: "Cumprimento do prazo",
-          data: data.map((item) => Number(item.cumprimento || 0) * 100),
-          borderColor: "#d71920",
-          backgroundColor: "rgba(215, 25, 32, .08)",
-          pointBackgroundColor: "#ffffff",
-          pointBorderColor: "#d71920",
-          pointBorderWidth: 2,
-          fill: true,
-          borderWidth: 3,
-          pointRadius: 3,
-          pointHoverRadius: 6,
-          tension: 0.32
-        },
-        {
-          label: "Meta SLA",
-          data: data.map(() => 95),
-          borderColor: "#159455",
-          borderWidth: 1.5,
-          pointRadius: 0,
-          borderDash: [7, 6]
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: {
-        mode: "index",
-        intersect: false
-      },
-      scales: {
-        y: {
-          min: 0,
-          max: 100,
-          grid: {
-            color: "rgba(152, 162, 179, .14)"
-          },
-          ticks: {
-            callback: (valor) => `${valor}%`
-          }
-        },
-        x: {
-          grid: {
-            display: false
-          }
-        }
-      },
-      plugins: {
-        legend: {
-          position: "bottom"
-        },
-        tooltip: {
-          callbacks: {
-            label: (context) => {
-              if (context.datasetIndex === 1) {
-                return "Meta SLA: 95%";
-              }
-
-              const item = data[context.dataIndex];
-              const percentual = Number(item.cumprimento || 0) * 100;
-
-              return [
-                `Cumprimento: ${percentual.toFixed(2).replace(".", ",")}%`,
-                `No prazo: ${nf.format(item.no_prazo || 0)}`,
-                `Fora do prazo: ${nf.format(item.fora_prazo || 0)}`,
-                `Pacotes avaliados: ${nf.format(item.avaliados || 0)}`,
-                `Prazo ponderado: ${Number(item.prazo_ponderado || 0).toFixed(2).replace(".", ",")} dias`
-              ];
-            }
-          }
-        }
-      }
-    }
-  });
-}
-
 async function carregarRm() {
   const data = await getJSON(`/api/sla-rm${montarQuery()}`);
 
@@ -361,7 +213,12 @@ async function carregarRm() {
     options: {
       indexAxis: "y",
       layout: {
-        padding: { top: 4, right: 10, bottom: 26, left: 4 }
+        padding: {
+          top: 4,
+          right: 10,
+          bottom: 26,
+          left: 4
+        }
       },
       responsive: true,
       maintainAspectRatio: false,
@@ -623,29 +480,6 @@ document.getElementById("btnLimpar").addEventListener("click", async () => {
   }
 });
 
-document.getElementById("btnAplicarPrazo").addEventListener("click", async () => {
-  try {
-    await carregarPrazoDiario();
-  } catch (erro) {
-    console.error(erro);
-    alert("Erro ao aplicar os filtros do cumprimento de prazo.");
-  }
-});
-
-document.getElementById("btnLimparPrazo").addEventListener("click", async () => {
-  definirDataPadraoPrazo();
-  document.getElementById("prazoResponsavel").value = "";
-  document.getElementById("prazoBase").value = "";
-  document.getElementById("prazoCidade").value = "";
-
-  try {
-    await carregarPrazoDiario();
-  } catch (erro) {
-    console.error(erro);
-    alert("Erro ao limpar os filtros do cumprimento de prazo.");
-  }
-});
-
 document.getElementById("btnBaixarRanking").addEventListener("click", async () => {
   try {
     await baixarRanking();
@@ -728,12 +562,8 @@ document
 async function iniciar() {
   try {
     definirDataPadraoOntem();
-    definirDataPadraoPrazo();
     await carregarOpcoesFiltros();
-    await Promise.all([
-      carregarDashboard(),
-      carregarPrazoDiario()
-    ]);
+    await carregarDashboard();
   } catch (erro) {
     console.error(erro);
     alert("Erro ao carregar o dashboard.");
