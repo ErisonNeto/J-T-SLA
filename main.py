@@ -932,6 +932,7 @@ def prazo_diario(
         WITH dados AS (
             SELECT
                 data_sla,
+                meta_total,
                 {PRAZO_STATUS_SQL} AS resultado_prazo
             FROM entregas
             WHERE {where}
@@ -1019,7 +1020,7 @@ def prazo_analise_csv(
             {PRAZO_STATUS_SQL} AS resultado_prazo
         FROM entregas
         WHERE {where}
-        ORDER BY data_sla, base_entrega, cidade_destino, numero_remessa;
+        ORDER BY data_sla, base_entrega, cidade_base, numero_remessa;
     """
 
     with get_conn() as conn:

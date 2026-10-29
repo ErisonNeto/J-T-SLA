@@ -558,12 +558,26 @@ def retropreencher_metas_historicas():
     metas = carregar_metas()
 
     mapa = {}
-    for row in metas.itertuples(index=False):
-        mapa[row._base_chave] = (
-            None if pd.isna(row.cidade_base) else str(row.cidade_base),
-            None if pd.isna(row.meta_transit) else float(row.meta_transit),
-            None if pd.isna(row.meta_entrega) else float(row.meta_entrega),
-            None if pd.isna(row.meta_total) else float(row.meta_total),
+    for (
+        base_chave,
+        cidade_base,
+        meta_transit,
+        meta_entrega,
+        meta_total,
+    ) in metas[
+        [
+            "_base_chave",
+            "cidade_base",
+            "meta_transit",
+            "meta_entrega",
+            "meta_total",
+        ]
+    ].itertuples(index=False, name=None):
+        mapa[base_chave] = (
+            None if pd.isna(cidade_base) else str(cidade_base),
+            None if pd.isna(meta_transit) else float(meta_transit),
+            None if pd.isna(meta_entrega) else float(meta_entrega),
+            None if pd.isna(meta_total) else float(meta_total),
         )
 
     with get_conn() as conn:
