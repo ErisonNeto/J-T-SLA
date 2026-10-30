@@ -3,3 +3,8 @@ uvicorn[standard]
 psycopg[binary]
 python-dotenv
 jinja2
+pandas
+openpyxl
+google-auth
+google-api-python-client
+requests
