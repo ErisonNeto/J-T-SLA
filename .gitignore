@@ -1,8 +1,11 @@
 .env
+.env.*
+!.env.example
 .venv/
 __pycache__/
 *.pyc
-*.pyo
+google-drive.json
+*.json
+dados/
 *.xlsx
 *.xls
-dados/
