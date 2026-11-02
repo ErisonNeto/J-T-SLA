@@ -758,19 +758,16 @@ def montar_filtros_prazo(
 PRAZO_STATUS_SQL = """
 CASE
     WHEN meta_total IS NULL
-      OR data_limite_prazo IS NULL
-      OR data_expedicao_sc IS NULL
         THEN 'Sem meta cadastrada'
-    WHEN data_hora_entrega IS NOT NULL
-      AND data_hora_entrega::date <= data_limite_prazo
+    WHEN prazo_atual_transferencia IS NULL
+      OR prazo_atual_entrega IS NULL
+        THEN 'Sem dados de prazo'
+    WHEN (
+        prazo_atual_transferencia
+        + prazo_atual_entrega
+    ) <= meta_total
         THEN 'Dentro da meta'
-    WHEN data_hora_entrega IS NOT NULL
-      AND data_hora_entrega::date > data_limite_prazo
-        THEN 'Fora da meta'
-    WHEN data_hora_entrega IS NULL
-      AND CURRENT_DATE > data_limite_prazo
-        THEN 'Fora da meta'
-    ELSE 'Aguardando prazo'
+    ELSE 'Fora da meta'
 END
 """
 
@@ -863,9 +860,7 @@ def prazo_kpis(
             COUNT(*) FILTER (
                 WHERE resultado_prazo = 'Fora da meta'
             )::bigint AS fora_meta,
-            COUNT(*) FILTER (
-                WHERE resultado_prazo = 'Aguardando prazo'
-            )::bigint AS aguardando,
+            0::bigint AS aguardando,
             COUNT(*) FILTER (
                 WHERE resultado_prazo = 'Sem meta cadastrada'
             )::bigint AS sem_meta,
@@ -873,11 +868,7 @@ def prazo_kpis(
                 WHERE meta_total IS NOT NULL
             )::bigint AS com_meta,
             COUNT(*) FILTER (
-                WHERE meta_total IS NOT NULL
-                  AND (
-                    data_expedicao_sc IS NULL
-                    OR data_limite_prazo IS NULL
-                  )
+                WHERE resultado_prazo = 'Sem dados de prazo'
             )::bigint AS sem_dados_reais,
             AVG(
                 CASE
@@ -932,7 +923,6 @@ def prazo_diario(
         WITH dados AS (
             SELECT
                 data_sla,
-                meta_total,
                 {PRAZO_STATUS_SQL} AS resultado_prazo
             FROM entregas
             WHERE {where}
@@ -1007,20 +997,20 @@ def prazo_analise_csv(
             supervisor,
             codigo_base,
             base_entrega,
-            cidade_base,
+            cidade_destino,
             prazo_atual_transferencia,
             prazo_atual_entrega,
+            (
+                prazo_atual_transferencia
+                + prazo_atual_entrega
+            ) AS prazo_sistema,
             meta_transit,
             meta_entrega,
             meta_total,
-            data_expedicao_sc,
-            data_limite_prazo,
-            data_hora_entrega,
-            prazo_real_dias,
             {PRAZO_STATUS_SQL} AS resultado_prazo
         FROM entregas
         WHERE {where}
-        ORDER BY data_sla, base_entrega, cidade_base, numero_remessa;
+        ORDER BY data_sla, base_entrega, cidade_destino, numero_remessa;
     """
 
     with get_conn() as conn:
@@ -1039,16 +1029,13 @@ def prazo_analise_csv(
         "Supervisor",
         "Código Base",
         "Base de entrega",
-        "Cidade da Base",
-        "Prazo atual transferência (W)",
-        "Prazo atual entrega (Y)",
-        "Nova meta Transit",
-        "Nova meta Entrega",
+        "Cidade Destino",
+        "Prazo transferência (W)",
+        "Prazo entrega (Y)",
+        "Prazo Sistema (W + Y)",
+        "Novo Transit",
+        "Novo Prazo",
         "Meta total",
-        "Expedição SC/HUB",
-        "Data limite da meta",
-        "Data/Hora entrega",
-        "Prazo real (dias)",
         "Resultado",
     ]
 
@@ -1056,9 +1043,8 @@ def prazo_analise_csv(
 
     for row in rows:
         valores = list(row)
-        for idx in [1, 12, 13, 14]:
-            if valores[idx] is not None and hasattr(valores[idx], "isoformat"):
-                valores[idx] = valores[idx].isoformat()
+        if valores[1] is not None and hasattr(valores[1], "isoformat"):
+            valores[1] = valores[1].isoformat()
         linhas.append(";".join(csv_field(x) for x in valores))
 
     conteudo = "\ufeff" + "\r\n".join(linhas)

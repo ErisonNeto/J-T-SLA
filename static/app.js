@@ -684,12 +684,12 @@ function formatarMetaPrazo(data) {
   if (min === max) {
     const valor = Number.isInteger(min) ? min : min.toFixed(1).replace(".", ",");
     tag.textContent = `META ${valor}D`;
-    resumo.textContent = `Meta da base selecionada: ${valor} dia(s)`;
+    resumo.textContent = `Meta do filtro selecionado: ${valor} dia(s)`;
   } else {
     const minTxt = Number.isInteger(min) ? min : min.toFixed(1).replace(".", ",");
     const maxTxt = Number.isInteger(max) ? max : max.toFixed(1).replace(".", ",");
     tag.textContent = `${minTxt}–${maxTxt}D`;
-    resumo.textContent = "Meta variável conforme a Base selecionada";
+    resumo.textContent = "Meta variável por Base + Cidade Destino";
   }
 }
 
@@ -704,7 +704,7 @@ async function carregarKpisPrazo() {
     `${nf.format(data.avaliados || 0)} avaliados • ${nf.format(data.com_meta || 0)} com meta`;
 
   document.getElementById("prazoPendencias").textContent =
-    `${nf.format(data.sem_dados_reais || 0)} sem dados reais • ${nf.format(data.sem_meta || 0)} sem meta`;
+    `${nf.format(data.sem_dados_reais || 0)} sem W/Y • ${nf.format(data.sem_meta || 0)} sem meta`;
 
   formatarMetaPrazo(data);
 }
@@ -722,7 +722,7 @@ async function carregarGraficoPrazo() {
       labels: data.map((item) => item.data),
       datasets: [
         {
-          label: "Cumprimento real",
+          label: "Cumprimento W + Y x Meta",
           data: data.map((item) =>
             item.cumprimento == null ? null : Number(item.cumprimento) * 100
           ),
@@ -740,7 +740,7 @@ async function carregarGraficoPrazo() {
           yAxisID: "y"
         },
         {
-          label: "Meta média da Base (dias)",
+          label: "Meta média (Novo Transit + Novo Prazo)",
           data: data.map((item) =>
             item.meta_media == null ? null : Number(item.meta_media)
           ),
@@ -805,7 +805,7 @@ async function carregarGraficoPrazo() {
               if (context.dataset.yAxisID === "yMeta") {
                 return `Meta média: ${Number(context.raw).toFixed(2).replace(".", ",")} dia(s)`;
               }
-              return `Cumprimento real: ${Number(context.raw).toFixed(2).replace(".", ",")}%`;
+              return `Cumprimento: ${Number(context.raw).toFixed(2).replace(".", ",")}%`;
             },
             afterBody: (items) => {
               const item = data[items[0].dataIndex];
