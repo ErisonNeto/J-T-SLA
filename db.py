@@ -18,17 +18,9 @@ if not JT_API_KEY:
     raise RuntimeError("JT_API_KEY não configurada.")
 
 
-# OIDs principais do PostgreSQL que precisam voltar como objetos Python
-# porque o main.py atual chama .isoformat() em datas.
 OID_DATE = 1082
 OID_TIMESTAMP = 1114
 OID_TIMESTAMPTZ = 1184
-
-
-def _serializar_param(valor):
-    if isinstance(valor, (date, datetime)):
-        return valor.isoformat()
-    return valor
 
 
 def _converter_valor(valor, oid):
@@ -50,6 +42,34 @@ def _converter_valor(valor, oid):
     return valor
 
 
+def _preparar_sql_e_params(comando, params):
+    params = list(params or [])
+    partes = comando.split("%s")
+
+    serializados = []
+    placeholders = []
+
+    for valor in params:
+        if isinstance(valor, datetime):
+            serializados.append(valor.isoformat())
+            placeholders.append("%s::timestamptz" if valor.tzinfo else "%s::timestamp")
+        elif isinstance(valor, date):
+            serializados.append(valor.isoformat())
+            placeholders.append("%s::date")
+        else:
+            serializados.append(valor)
+            placeholders.append("%s")
+
+    if len(partes) - 1 != len(placeholders):
+        return comando, serializados
+
+    sql = partes[0]
+    for i, placeholder in enumerate(placeholders):
+        sql += placeholder + partes[i + 1]
+
+    return sql, serializados
+
+
 class APICursor:
     def __init__(self, session):
         self.session = session
@@ -63,12 +83,11 @@ class APICursor:
         return False
 
     def execute(self, comando, params=None):
+        sql, params_serializados = _preparar_sql_e_params(comando, params)
+
         payload = {
-            "sql": comando,
-            "params": [
-                _serializar_param(v)
-                for v in (params or [])
-            ],
+            "sql": sql,
+            "params": params_serializados,
         }
 
         resposta = self.session.post(
