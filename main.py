@@ -923,6 +923,7 @@ def prazo_diario(
         WITH dados AS (
             SELECT
                 data_sla,
+                meta_total,
                 {PRAZO_STATUS_SQL} AS resultado_prazo
             FROM entregas
             WHERE {where}
