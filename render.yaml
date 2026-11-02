@@ -4,19 +4,11 @@ services:
     runtime: python
     rootDir: .
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main_drive:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /healthz
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
     autoDeploy: true
     envVars:
-      - key: JT_TIMEZONE
-        value: America/Belem
-      - key: GOOGLE_DRIVE_FOLDER_ID
-        value: 1pIXZ5unObZaSJPHlt65hwTMHXI-UOs8U
-      - key: GOOGLE_APPLICATION_CREDENTIALS
-        value: /etc/secrets/google-drive.json
-      - key: DRIVE_CACHE_SECONDS
-        value: '300'
-      - key: DRIVE_MAX_FILE_MB
-        value: '25'
-      - key: DRIVE_MAX_TOTAL_MB
-        value: '150'
+      - key: JT_API_URL
+        value: https://jt-api.rockettechbr.com.br
+      - key: JT_API_KEY
+        sync: false
