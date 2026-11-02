@@ -672,25 +672,17 @@ function formatarMetaPrazo(data) {
   const tag = document.getElementById("prazoMetaTag");
   const resumo = document.getElementById("prazoMetaResumo");
 
-  if (data.meta_min == null || data.meta_max == null) {
+  if (data.meta_f_media == null || data.meta_g_media == null) {
     tag.textContent = "SEM META";
-    resumo.textContent = "Nenhuma meta cadastrada para o filtro";
+    resumo.textContent = "Nenhuma meta F/G cadastrada para o filtro";
     return;
   }
 
-  const min = Number(data.meta_min);
-  const max = Number(data.meta_max);
+  const f = Number(data.meta_f_media).toFixed(2).replace(".", ",");
+  const g = Number(data.meta_g_media).toFixed(2).replace(".", ",");
 
-  if (min === max) {
-    const valor = Number.isInteger(min) ? min : min.toFixed(1).replace(".", ",");
-    tag.textContent = `META ${valor}D`;
-    resumo.textContent = `Meta do filtro selecionado: ${valor} dia(s)`;
-  } else {
-    const minTxt = Number.isInteger(min) ? min : min.toFixed(1).replace(".", ",");
-    const maxTxt = Number.isInteger(max) ? max : max.toFixed(1).replace(".", ",");
-    tag.textContent = `${minTxt}–${maxTxt}D`;
-    resumo.textContent = "Meta variável por Base + Cidade Destino";
-  }
+  tag.textContent = `F ${f} | G ${g}`;
+  resumo.textContent = `Comparação: (W + Y) ≤ (F + G)`;
 }
 
 async function carregarKpisPrazo() {
@@ -722,7 +714,7 @@ async function carregarGraficoPrazo() {
       labels: data.map((item) => item.data),
       datasets: [
         {
-          label: "Cumprimento W + Y x Meta",
+          label: "Cumprimento (W + Y) x (F + G)",
           data: data.map((item) =>
             item.cumprimento == null ? null : Number(item.cumprimento) * 100
           ),
@@ -740,14 +732,32 @@ async function carregarGraficoPrazo() {
           yAxisID: "y"
         },
         {
-          label: "Meta média (Novo Transit + Novo Prazo)",
+          label: "Meta F média",
           data: data.map((item) =>
-            item.meta_media == null ? null : Number(item.meta_media)
+            item.meta_f_media == null ? null : Number(item.meta_f_media)
           ),
           borderColor: "#111827",
           backgroundColor: "transparent",
           pointBackgroundColor: "#ffffff",
           pointBorderColor: "#111827",
+          pointBorderWidth: 2,
+          fill: false,
+          borderWidth: 2,
+          pointRadius: 2,
+          pointHoverRadius: 5,
+          tension: 0.25,
+          spanGaps: false,
+          yAxisID: "yMeta"
+        },
+        {
+          label: "Meta G média",
+          data: data.map((item) =>
+            item.meta_g_media == null ? null : Number(item.meta_g_media)
+          ),
+          borderColor: "#667085",
+          backgroundColor: "transparent",
+          pointBackgroundColor: "#ffffff",
+          pointBorderColor: "#667085",
           pointBorderWidth: 2,
           fill: false,
           borderWidth: 2,
@@ -803,7 +813,7 @@ async function carregarGraficoPrazo() {
             label: (context) => {
               if (context.raw == null) return "";
               if (context.dataset.yAxisID === "yMeta") {
-                return `Meta média: ${Number(context.raw).toFixed(2).replace(".", ",")} dia(s)`;
+                return `${context.dataset.label}: ${Number(context.raw).toFixed(2).replace(".", ",")}`;
               }
               return `Cumprimento: ${Number(context.raw).toFixed(2).replace(".", ",")}%`;
             },
@@ -815,9 +825,12 @@ async function carregarGraficoPrazo() {
                 `Dentro: ${nf.format(item.dentro_meta || 0)}`,
                 `Fora: ${nf.format(item.fora_meta || 0)}`,
                 `Com meta: ${nf.format(item.com_meta || 0)}`,
-                item.meta_media == null
-                  ? "Meta média: sem cadastro"
-                  : `Meta média: ${Number(item.meta_media).toFixed(2).replace(".", ",")} dia(s)`
+                item.meta_f_media == null
+                  ? "Meta F média: sem cadastro"
+                  : `Meta F média: ${Number(item.meta_f_media).toFixed(2).replace(".", ",")}`,
+                item.meta_g_media == null
+                  ? "Meta G média: sem cadastro"
+                  : `Meta G média: ${Number(item.meta_g_media).toFixed(2).replace(".", ",")}`
               ];
             }
           }

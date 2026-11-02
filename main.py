@@ -757,7 +757,8 @@ def montar_filtros_prazo(
 
 PRAZO_STATUS_SQL = """
 CASE
-    WHEN meta_total IS NULL
+    WHEN meta_transit IS NULL
+      OR meta_entrega IS NULL
         THEN 'Sem meta cadastrada'
     WHEN prazo_atual_transferencia IS NULL
       OR prazo_atual_entrega IS NULL
@@ -765,7 +766,10 @@ CASE
     WHEN (
         prazo_atual_transferencia
         + prazo_atual_entrega
-    ) <= meta_total
+    ) <= (
+        meta_transit
+        + meta_entrega
+    )
         THEN 'Dentro da meta'
     ELSE 'Fora da meta'
 END
@@ -865,7 +869,8 @@ def prazo_kpis(
                 WHERE resultado_prazo = 'Sem meta cadastrada'
             )::bigint AS sem_meta,
             COUNT(*) FILTER (
-                WHERE meta_total IS NOT NULL
+                WHERE meta_transit IS NOT NULL
+                  AND meta_entrega IS NOT NULL
             )::bigint AS com_meta,
             COUNT(*) FILTER (
                 WHERE resultado_prazo = 'Sem dados de prazo'
@@ -877,12 +882,24 @@ def prazo_kpis(
                     ELSE NULL
                 END
             ) AS cumprimento,
-            AVG(meta_total) FILTER (WHERE meta_total IS NOT NULL) AS meta_media,
-            MIN(meta_total) FILTER (WHERE meta_total IS NOT NULL) AS meta_min,
-            MAX(meta_total) FILTER (WHERE meta_total IS NOT NULL) AS meta_max,
-            COUNT(DISTINCT meta_total) FILTER (
-                WHERE meta_total IS NOT NULL
-            )::bigint AS qtd_metas
+            AVG(meta_transit) FILTER (
+                WHERE meta_transit IS NOT NULL
+            ) AS meta_f_media,
+            AVG(meta_entrega) FILTER (
+                WHERE meta_entrega IS NOT NULL
+            ) AS meta_g_media,
+            MIN(meta_transit) FILTER (
+                WHERE meta_transit IS NOT NULL
+            ) AS meta_f_min,
+            MAX(meta_transit) FILTER (
+                WHERE meta_transit IS NOT NULL
+            ) AS meta_f_max,
+            MIN(meta_entrega) FILTER (
+                WHERE meta_entrega IS NOT NULL
+            ) AS meta_g_min,
+            MAX(meta_entrega) FILTER (
+                WHERE meta_entrega IS NOT NULL
+            ) AS meta_g_max
         FROM dados;
     """
 
@@ -901,10 +918,12 @@ def prazo_kpis(
         "com_meta": row[6],
         "sem_dados_reais": row[7],
         "cumprimento": float(row[8]) if row[1] and row[8] is not None else None,
-        "meta_media": float(row[9]) if row[9] is not None else None,
-        "meta_min": float(row[10]) if row[10] is not None else None,
-        "meta_max": float(row[11]) if row[11] is not None else None,
-        "qtd_metas": row[12],
+        "meta_f_media": float(row[9]) if row[9] is not None else None,
+        "meta_g_media": float(row[10]) if row[10] is not None else None,
+        "meta_f_min": float(row[11]) if row[11] is not None else None,
+        "meta_f_max": float(row[12]) if row[12] is not None else None,
+        "meta_g_min": float(row[13]) if row[13] is not None else None,
+        "meta_g_max": float(row[14]) if row[14] is not None else None,
     }
 
 
@@ -923,7 +942,10 @@ def prazo_diario(
         WITH dados AS (
             SELECT
                 data_sla,
-                meta_total,
+                meta_transit,
+                meta_entrega,
+                prazo_atual_transferencia,
+                prazo_atual_entrega,
                 {PRAZO_STATUS_SQL} AS resultado_prazo
             FROM entregas
             WHERE {where}
@@ -942,7 +964,8 @@ def prazo_diario(
                 WHERE resultado_prazo = 'Fora da meta'
             )::bigint AS fora_meta,
             COUNT(*) FILTER (
-                WHERE meta_total IS NOT NULL
+                WHERE meta_transit IS NOT NULL
+                  AND meta_entrega IS NOT NULL
             )::bigint AS com_meta,
             AVG(meta_total) FILTER (
                 WHERE meta_total IS NOT NULL
@@ -972,8 +995,9 @@ def prazo_diario(
             "dentro_meta": row[3],
             "fora_meta": row[4],
             "com_meta": row[5],
-            "meta_media": float(row[6]) if row[6] is not None else None,
-            "cumprimento": float(row[7]) if row[2] and row[7] is not None else None,
+            "meta_f_media": float(row[6]) if row[6] is not None else None,
+            "meta_g_media": float(row[7]) if row[7] is not None else None,
+            "cumprimento": float(row[8]) if row[2] and row[8] is not None else None,
         }
         for row in rows
     ]
@@ -1007,7 +1031,10 @@ def prazo_analise_csv(
             ) AS prazo_sistema,
             meta_transit,
             meta_entrega,
-            meta_total,
+            (
+                meta_transit
+                + meta_entrega
+            ) AS meta_total_calculada,
             {PRAZO_STATUS_SQL} AS resultado_prazo
         FROM entregas
         WHERE {where}
@@ -1031,12 +1058,12 @@ def prazo_analise_csv(
         "Código Base",
         "Base de entrega",
         "Cidade Destino",
-        "Prazo transferência (W)",
-        "Prazo entrega (Y)",
+        "SLA coluna W",
+        "SLA coluna Y",
         "Prazo Sistema (W + Y)",
-        "Novo Transit",
-        "Novo Prazo",
-        "Meta total",
+        "Meta coluna F",
+        "Meta coluna G",
+        "Meta Total (F + G)",
         "Resultado",
     ]
 
