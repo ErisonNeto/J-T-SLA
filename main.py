@@ -967,9 +967,12 @@ def prazo_diario(
                 WHERE meta_transit IS NOT NULL
                   AND meta_entrega IS NOT NULL
             )::bigint AS com_meta,
-            AVG(meta_total) FILTER (
-                WHERE meta_total IS NOT NULL
-            ) AS meta_media,
+            AVG(meta_transit) FILTER (
+                WHERE meta_transit IS NOT NULL
+            ) AS meta_f_media,
+            AVG(meta_entrega) FILTER (
+                WHERE meta_entrega IS NOT NULL
+            ) AS meta_g_media,
             AVG(
                 CASE
                     WHEN resultado_prazo = 'Dentro da meta' THEN 1.0
