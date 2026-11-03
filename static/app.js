@@ -70,11 +70,13 @@ function montarQuery() {
   const dataFim = document.getElementById("dataFim").value;
   const responsavel = document.getElementById("responsavel").value;
   const rm = document.getElementById("rm").value;
+  const base = document.getElementById("base").value;
 
   if (dataInicio) params.set("data_inicio", dataInicio);
   if (dataFim) params.set("data_fim", dataFim);
   if (responsavel) params.set("responsavel", responsavel);
   if (rm) params.set("rm", rm);
+  if (base) params.set("base", base);
 
   const query = params.toString();
   return query ? `?${query}` : "";
@@ -101,6 +103,16 @@ async function carregarOpcoesFiltros() {
     option.value = nome;
     option.textContent = nome;
     selectRm.appendChild(option);
+  });
+
+  const selectBase = document.getElementById("base");
+  selectBase.innerHTML = '<option value="">Todas</option>';
+
+  (data.bases || []).forEach((nome) => {
+    const option = document.createElement("option");
+    option.value = nome;
+    option.textContent = nome;
+    selectBase.appendChild(option);
   });
 }
 
@@ -483,6 +495,7 @@ document.getElementById("btnLimpar").addEventListener("click", async () => {
 
   document.getElementById("responsavel").value = "";
   document.getElementById("rm").value = "";
+  document.getElementById("base").value = "";
 
   try {
     await carregarDashboard();

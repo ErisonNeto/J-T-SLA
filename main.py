@@ -41,6 +41,7 @@ def montar_filtros(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
 ):
     where = ["1=1"]
     params = []
@@ -60,6 +61,10 @@ def montar_filtros(
     if rm:
         where.append("rm = %s")
         params.append(rm)
+
+    if base:
+        where.append("base_entrega = %s")
+        params.append(base)
 
     return " AND ".join(where), params
 
@@ -110,11 +115,23 @@ def filtros():
             )
             rms = [row[0] for row in cur.fetchall()]
 
+            cur.execute(
+                """
+                SELECT DISTINCT base_entrega
+                FROM entregas
+                WHERE base_entrega IS NOT NULL
+                  AND TRIM(base_entrega) <> ''
+                ORDER BY base_entrega;
+                """
+            )
+            bases = [row[0] for row in cur.fetchall()]
+
     return {
         "data_min": datas[0].isoformat() if datas and datas[0] else None,
         "data_max": datas[1].isoformat() if datas and datas[1] else None,
         "responsaveis": responsaveis,
         "rms": rms,
+        "bases": bases,
     }
 
 
@@ -124,12 +141,14 @@ def kpis(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
     )
 
     sql = f"""
@@ -179,12 +198,14 @@ def sla_diario(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
     )
 
     sql = f"""
@@ -229,12 +250,14 @@ def sla_rm(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
     )
 
     sql = f"""
@@ -281,12 +304,14 @@ def piores_responsaveis(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
     )
 
     sql = f"""
@@ -365,12 +390,14 @@ def piores_bases(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
     )
 
     sql = f"""
@@ -424,12 +451,14 @@ def piores_entregadores(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
     )
 
     sql_total = f"""
@@ -526,12 +555,14 @@ def entregadores_detalhes(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
     )
 
     sql = f"""
@@ -579,12 +610,14 @@ def entregadores_csv(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
     )
 
     # numero_remessa é o Número da Remessa da coluna A do Excel,
@@ -665,12 +698,14 @@ def ranking_bases(
     data_fim: date | None = None,
     responsavel: str | None = None,
     rm: str | None = None,
+    base: str | None = None,
 ):
     where, params = montar_filtros(
         data_inicio,
         data_fim,
         responsavel,
         rm,
+        base,
     )
 
     sql = f"""

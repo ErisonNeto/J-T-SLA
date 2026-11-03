@@ -7,8 +7,15 @@
   <title>J&T Express | SLA Regional</title>
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="/static/style.css?v=20261029-prazo-tab" />
+  <link rel="stylesheet" href="/static/style.css?v=20261103-base-filter" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @media (min-width: 1451px) {
+      .filters-grid {
+        grid-template-columns: 1fr 1fr 1.35fr .85fr 1.15fr 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
   <header class="topbar shipping-style-header">
@@ -73,6 +80,13 @@
           <span>R/M</span>
           <select id="rm">
             <option value="">Todos</option>
+          </select>
+        </label>
+
+        <label class="filter-card">
+          <span>Base</span>
+          <select id="base">
+            <option value="">Todas</option>
           </select>
         </label>
 
@@ -409,6 +423,6 @@
     </footer>
   </main>
 
-  <script src="/static/app.js?v=20261102-soma-wy-fg"></script>
+  <script src="/static/app.js?v=20261103-base-filter"></script>
 </body>
 </html>
