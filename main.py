@@ -36,6 +36,17 @@ def health():
     return {"status": "ok"}
 
 
+# Focal exibido e utilizado nos filtros, respeitando a atribuicao de F TCM-PA.
+# Excecao temporaria na consulta: os dados brutos do banco permanecem intactos.
+FOCAL_SQL = """
+CASE
+    WHEN UPPER(BTRIM(COALESCE(base_entrega, ''))) = 'F TCM-PA'
+        THEN 'FERNANDO SILVA OLIVEIRA'
+    ELSE COALESCE(NULLIF(BTRIM(coordenador), ''), NULLIF(BTRIM(supervisor), ''))
+END
+"""
+
+
 def montar_filtros(
     data_inicio: date | None = None,
     data_fim: date | None = None,
@@ -55,8 +66,8 @@ def montar_filtros(
         params.append(data_fim)
 
     if responsavel:
-        where.append("(coordenador = %s OR supervisor = %s)")
-        params.extend([responsavel, responsavel])
+        where.append(f"({FOCAL_SQL}) = %s")
+        params.append(responsavel)
 
     if rm:
         where.append("rm = %s")
@@ -82,26 +93,12 @@ def filtros():
             )
             datas = cur.fetchone()
 
-            cur.execute(
-                """
-                WITH nomes AS (
-                    SELECT coordenador AS responsavel
-                    FROM entregas
-                    WHERE coordenador IS NOT NULL
-                      AND TRIM(coordenador) <> ''
-
-                    UNION
-
-                    SELECT supervisor AS responsavel
-                    FROM entregas
-                    WHERE supervisor IS NOT NULL
-                      AND TRIM(supervisor) <> ''
-                )
-                SELECT responsavel
-                FROM nomes
+            cur.execute(f"""
+                SELECT DISTINCT {FOCAL_SQL} AS responsavel
+                FROM entregas
+                WHERE {FOCAL_SQL} IS NOT NULL
                 ORDER BY responsavel;
-                """
-            )
+            """)
             responsaveis = [row[0] for row in cur.fetchall()]
 
             cur.execute(
@@ -306,71 +303,28 @@ def piores_responsaveis(
     rm: str | None = None,
     base: str | None = None,
 ):
-    where, params = montar_filtros(
-        data_inicio,
-        data_fim,
-        responsavel,
-        rm,
-        base,
-    )
-
+    where, params = montar_filtros(data_inicio, data_fim, responsavel, rm, base)
     sql = f"""
-        WITH responsaveis AS (
-            SELECT
-                coordenador AS responsavel,
-                'Coordenador'::text AS funcao,
-                COUNT(*)::bigint AS pedidos,
-                COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-                AVG(
-                    CASE
-                        WHEN no_prazo THEN 1.0
-                        ELSE 0.0
-                    END
-                ) AS sla
+        WITH dados AS (
+            SELECT {FOCAL_SQL} AS focal, no_prazo
             FROM entregas
             WHERE {where}
-              AND coordenador IS NOT NULL
-              AND TRIM(coordenador) <> ''
-            GROUP BY coordenador
-
-            UNION ALL
-
-            SELECT
-                supervisor AS responsavel,
-                'Supervisor'::text AS funcao,
-                COUNT(*)::bigint AS pedidos,
-                COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-                AVG(
-                    CASE
-                        WHEN no_prazo THEN 1.0
-                        ELSE 0.0
-                    END
-                ) AS sla
-            FROM entregas
-            WHERE {where}
-              AND supervisor IS NOT NULL
-              AND TRIM(supervisor) <> ''
-            GROUP BY supervisor
         )
-        SELECT
-            responsavel,
-            funcao,
-            pedidos,
-            fora_prazo,
-            sla
-        FROM responsaveis
+        SELECT focal AS responsavel,
+               'Focal'::text AS funcao,
+               COUNT(*)::bigint AS pedidos,
+               COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
+               AVG(CASE WHEN no_prazo THEN 1.0 ELSE 0.0 END) AS sla
+        FROM dados
+        WHERE focal IS NOT NULL
+        GROUP BY focal
         ORDER BY sla ASC, fora_prazo DESC, pedidos DESC
         LIMIT %s;
     """
-
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                sql,
-                params + params + [limit],
-            )
+            cur.execute(sql, params + [limit])
             rows = cur.fetchall()
-
     return [
         {
             "responsavel": row[0],
@@ -392,53 +346,36 @@ def piores_bases(
     rm: str | None = None,
     base: str | None = None,
 ):
-    where, params = montar_filtros(
-        data_inicio,
-        data_fim,
-        responsavel,
-        rm,
-        base,
-    )
-
+    where, params = montar_filtros(data_inicio, data_fim, responsavel, rm, base)
     sql = f"""
-        SELECT
-            codigo_base,
-            base_entrega,
-            coordenador,
-            supervisor,
-            COUNT(*)::bigint AS pedidos,
-            COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-            AVG(
-                CASE
-                    WHEN no_prazo THEN 1.0
-                    ELSE 0.0
-                END
-            ) AS sla
-        FROM entregas
-        WHERE {where}
-        GROUP BY
-            codigo_base,
-            base_entrega,
-            coordenador,
-            supervisor
+        WITH dados AS (
+            SELECT codigo_base, base_entrega, {FOCAL_SQL} AS focal, no_prazo
+            FROM entregas
+            WHERE {where}
+        )
+        SELECT codigo_base,
+               base_entrega,
+               focal,
+               COUNT(*)::bigint AS pedidos,
+               COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
+               AVG(CASE WHEN no_prazo THEN 1.0 ELSE 0.0 END) AS sla
+        FROM dados
+        GROUP BY codigo_base, base_entrega, focal
         ORDER BY sla ASC, fora_prazo DESC, pedidos DESC
         LIMIT %s;
     """
-
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, params + [limit])
             rows = cur.fetchall()
-
     return [
         {
             "codigo_base": row[0],
             "base_entrega": row[1],
-            "coordenador": row[2],
-            "supervisor": row[3],
-            "pedidos": row[4],
-            "fora_prazo": row[5],
-            "sla": float(row[6] or 0),
+            "focal": row[2],
+            "pedidos": row[3],
+            "fora_prazo": row[4],
+            "sla": float(row[5] or 0),
         }
         for row in rows
     ]
@@ -700,55 +637,37 @@ def ranking_bases(
     rm: str | None = None,
     base: str | None = None,
 ):
-    where, params = montar_filtros(
-        data_inicio,
-        data_fim,
-        responsavel,
-        rm,
-        base,
-    )
-
+    where, params = montar_filtros(data_inicio, data_fim, responsavel, rm, base)
     sql = f"""
-        SELECT
-            codigo_base,
-            base_entrega,
-            rm,
-            coordenador,
-            supervisor,
-            COUNT(*)::bigint AS pedidos,
-            COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-            AVG(
-                CASE
-                    WHEN no_prazo THEN 1.0
-                    ELSE 0.0
-                END
-            ) AS sla
-        FROM entregas
-        WHERE {where}
-        GROUP BY
-            codigo_base,
-            base_entrega,
-            rm,
-            coordenador,
-            supervisor
+        WITH dados AS (
+            SELECT codigo_base, base_entrega, rm, {FOCAL_SQL} AS focal, no_prazo
+            FROM entregas
+            WHERE {where}
+        )
+        SELECT codigo_base,
+               base_entrega,
+               rm,
+               focal,
+               COUNT(*)::bigint AS pedidos,
+               COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
+               AVG(CASE WHEN no_prazo THEN 1.0 ELSE 0.0 END) AS sla
+        FROM dados
+        GROUP BY codigo_base, base_entrega, rm, focal
         ORDER BY sla ASC, fora_prazo DESC, pedidos DESC;
     """
-
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, params)
             rows = cur.fetchall()
-
     return [
         {
             "codigo_base": row[0],
             "base_entrega": row[1],
             "rm": row[2],
-            "coordenador": row[3],
-            "supervisor": row[4],
-            "pedidos": row[5],
-            "fora_prazo": row[6],
-            "sla": float(row[7] or 0),
+            "focal": row[3],
+            "pedidos": row[4],
+            "fora_prazo": row[5],
+            "sla": float(row[6] or 0),
         }
         for row in rows
     ]
@@ -780,8 +699,8 @@ def montar_filtros_prazo(
         params.append(data_fim)
 
     if responsavel:
-        where.append("(coordenador = %s OR supervisor = %s)")
-        params.extend([responsavel, responsavel])
+        where.append(f"({FOCAL_SQL}) = %s")
+        params.append(responsavel)
 
     if base:
         where.append("base_entrega = %s")
@@ -824,20 +743,10 @@ def prazo_filtros(
             """)
             datas = cur.fetchone()
 
-            cur.execute("""
-                WITH nomes AS (
-                    SELECT coordenador AS responsavel
-                    FROM entregas
-                    WHERE coordenador IS NOT NULL
-                      AND TRIM(coordenador) <> ''
-                    UNION
-                    SELECT supervisor AS responsavel
-                    FROM entregas
-                    WHERE supervisor IS NOT NULL
-                      AND TRIM(supervisor) <> ''
-                )
-                SELECT responsavel
-                FROM nomes
+            cur.execute(f"""
+                SELECT DISTINCT {FOCAL_SQL} AS responsavel
+                FROM entregas
+                WHERE {FOCAL_SQL} IS NOT NULL
                 ORDER BY responsavel;
             """)
             responsaveis = [row[0] for row in cur.fetchall()]
@@ -845,8 +754,8 @@ def prazo_filtros(
             params = []
             filtro = "1=1"
             if responsavel:
-                filtro += " AND (coordenador = %s OR supervisor = %s)"
-                params.extend([responsavel, responsavel])
+                filtro += f" AND ({FOCAL_SQL}) = %s"
+                params.append(responsavel)
 
             cur.execute(
                 f"""
@@ -1056,8 +965,7 @@ def prazo_analise_csv(
         SELECT
             numero_remessa,
             data_sla,
-            coordenador,
-            supervisor,
+            {FOCAL_SQL} AS focal,
             codigo_base,
             base_entrega,
             cidade_destino,
@@ -1091,8 +999,7 @@ def prazo_analise_csv(
     cabecalho = [
         "Número da Remessa",
         "Data SLA",
-        "Coordenador",
-        "Supervisor",
+        "Focal",
         "Código Base",
         "Base de entrega",
         "Cidade Destino",

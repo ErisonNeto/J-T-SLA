@@ -292,7 +292,6 @@ async function carregarResponsaveis() {
   tbody.innerHTML = data.map((item) => `
     <tr>
       <td>${item.responsavel ?? ""}</td>
-      <td>${item.funcao ?? ""}</td>
       <td>${nf.format(item.pedidos || 0)}</td>
       <td>${nf.format(item.fora_prazo || 0)}</td>
       <td class="${classeSla(item.sla)}">${pct(item.sla)}</td>
@@ -311,16 +310,7 @@ async function carregarBases() {
   const tbody = document.getElementById("tbodyBases");
 
   tbody.innerHTML = data.map((item) => {
-    const coordenador = String(item.coordenador ?? "").trim();
-    const supervisor = String(item.supervisor ?? "").trim();
-
-    let responsavel = "Sem responsável";
-
-    if (coordenador) {
-      responsavel = `${coordenador} (Coordenador)`;
-    } else if (supervisor) {
-      responsavel = `${supervisor} (Supervisor)`;
-    }
+    const responsavel = String(item.focal ?? "").trim() || "Sem focal";
 
     return `
       <tr>
@@ -346,7 +336,7 @@ async function carregarEntregadores(limite = 50) {
   const total = Number(resposta.total_entregadores || 0);
 
   document.getElementById("entregadoresResumo").textContent =
-    `${Math.min(limite, total)} piores de ${total} entregadores`;
+    `${Math.min(limite, total)} de ${total} entregadores (menor SLA)`;
 
   const tbody = document.getElementById("tbodyEntregadores");
 
@@ -386,8 +376,7 @@ async function carregarRankingBases() {
         <td>${item.codigo_base ?? ""}</td>
         <td>${item.base_entrega ?? ""}</td>
         <td>${item.rm ?? ""}</td>
-        <td>${item.coordenador ?? "—"}</td>
-        <td>${item.supervisor ?? "—"}</td>
+        <td>${item.focal ?? "—"}</td>
         <td>${nf.format(item.pedidos || 0)}</td>
         <td>${nf.format(item.fora_prazo || 0)}</td>
         <td>
@@ -427,8 +416,7 @@ async function baixarRanking() {
     "Código Base",
     "Base de entrega",
     "R/M",
-    "Coordenador",
-    "Supervisor",
+    "Focal",
     "Pedidos",
     "Fora do prazo",
     "SLA"
@@ -441,8 +429,7 @@ async function baixarRanking() {
       item.codigo_base ?? "",
       item.base_entrega ?? "",
       item.rm ?? "",
-      item.coordenador ?? "",
-      item.supervisor ?? "",
+      item.focal ?? "",
       item.pedidos ?? 0,
       item.fora_prazo ?? 0,
       `${(Number(item.sla || 0) * 100).toFixed(2).replace(".", ",")}%`
