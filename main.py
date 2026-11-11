@@ -36,14 +36,31 @@ def health():
     return {"status": "ok"}
 
 
-# Focal exibido e utilizado nos filtros, respeitando a atribuicao de F TCM-PA.
-# Excecao temporaria na consulta: os dados brutos do banco permanecem intactos.
-FOCAL_SQL = """
-CASE
-    WHEN UPPER(BTRIM(COALESCE(base_entrega, ''))) = 'F TCM-PA'
-        THEN 'FERNANDO SILVA OLIVEIRA'
-    ELSE COALESCE(NULLIF(BTRIM(coordenador), ''), NULLIF(BTRIM(supervisor), ''))
-END
+# Correcao de gestao exibida sem reescrever historico operacional do PostgreSQL.
+BASE_TCM_SQL = "UPPER(BTRIM(COALESCE(base_entrega, ''))) = 'F TCM-PA'"
+FOCAL_COORD_SQL = f"""
+CASE WHEN {BASE_TCM_SQL} THEN 'FERNANDO SILVA OLIVEIRA'
+     ELSE NULLIF(BTRIM(coordenador), '') END
+"""
+FOCAL_SUP_SQL = f"""
+CASE WHEN {BASE_TCM_SQL} THEN NULL
+     ELSE NULLIF(BTRIM(supervisor), '') END
+"""
+# Mostrar os gestores como focais, sem diferenciar seus cargos.
+# Preserva ambos quando coordenador e supervisor sao pessoas diferentes.
+FOCAL_SQL = f"""
+CASE WHEN {BASE_TCM_SQL} THEN 'FERNANDO SILVA OLIVEIRA'
+     ELSE NULLIF(CONCAT_WS(' / ',
+         NULLIF(BTRIM(coordenador), ''),
+         CASE WHEN BTRIM(coordenador) = BTRIM(supervisor) THEN NULL
+              ELSE NULLIF(BTRIM(supervisor), '') END
+     ), '') END
+"""
+# Um gestor pode ser coordenador em uma base e supervisor em outra.
+# O filtro precisa abranger ambos, mas F TCM-PA pertence apenas ao Fernando.
+FOCAL_MATCH_SQL = f"""
+CASE WHEN {BASE_TCM_SQL} THEN ('FERNANDO SILVA OLIVEIRA' = %s)
+     ELSE (coordenador = %s OR supervisor = %s) END
 """
 
 
@@ -66,8 +83,8 @@ def montar_filtros(
         params.append(data_fim)
 
     if responsavel:
-        where.append(f"({FOCAL_SQL}) = %s")
-        params.append(responsavel)
+        where.append(f"({FOCAL_MATCH_SQL})")
+        params.extend([responsavel, responsavel, responsavel])
 
     if rm:
         where.append("rm = %s")
@@ -94,9 +111,13 @@ def filtros():
             datas = cur.fetchone()
 
             cur.execute(f"""
-                SELECT DISTINCT {FOCAL_SQL} AS responsavel
-                FROM entregas
-                WHERE {FOCAL_SQL} IS NOT NULL
+                SELECT nome AS responsavel
+                FROM (
+                    SELECT {FOCAL_COORD_SQL} AS nome FROM entregas
+                    UNION
+                    SELECT {FOCAL_SUP_SQL} AS nome FROM entregas
+                ) AS focais
+                WHERE nome IS NOT NULL
                 ORDER BY responsavel;
             """)
             responsaveis = [row[0] for row in cur.fetchall()]
@@ -306,7 +327,11 @@ def piores_responsaveis(
     where, params = montar_filtros(data_inicio, data_fim, responsavel, rm, base)
     sql = f"""
         WITH dados AS (
-            SELECT {FOCAL_SQL} AS focal, no_prazo
+            SELECT {FOCAL_COORD_SQL} AS focal, no_prazo
+            FROM entregas
+            WHERE {where}
+            UNION ALL
+            SELECT {FOCAL_SUP_SQL} AS focal, no_prazo
             FROM entregas
             WHERE {where}
         )
@@ -323,7 +348,7 @@ def piores_responsaveis(
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, params + [limit])
+            cur.execute(sql, params + params + [limit])
             rows = cur.fetchall()
     return [
         {
@@ -699,8 +724,8 @@ def montar_filtros_prazo(
         params.append(data_fim)
 
     if responsavel:
-        where.append(f"({FOCAL_SQL}) = %s")
-        params.append(responsavel)
+        where.append(f"({FOCAL_MATCH_SQL})")
+        params.extend([responsavel, responsavel, responsavel])
 
     if base:
         where.append("base_entrega = %s")
@@ -744,9 +769,13 @@ def prazo_filtros(
             datas = cur.fetchone()
 
             cur.execute(f"""
-                SELECT DISTINCT {FOCAL_SQL} AS responsavel
-                FROM entregas
-                WHERE {FOCAL_SQL} IS NOT NULL
+                SELECT nome AS responsavel
+                FROM (
+                    SELECT {FOCAL_COORD_SQL} AS nome FROM entregas
+                    UNION
+                    SELECT {FOCAL_SUP_SQL} AS nome FROM entregas
+                ) AS focais
+                WHERE nome IS NOT NULL
                 ORDER BY responsavel;
             """)
             responsaveis = [row[0] for row in cur.fetchall()]
@@ -754,8 +783,8 @@ def prazo_filtros(
             params = []
             filtro = "1=1"
             if responsavel:
-                filtro += f" AND ({FOCAL_SQL}) = %s"
-                params.append(responsavel)
+                filtro += f" AND ({FOCAL_MATCH_SQL})"
+                params.extend([responsavel, responsavel, responsavel])
 
             cur.execute(
                 f"""
