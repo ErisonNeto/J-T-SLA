@@ -2,697 +2,285 @@ from pathlib import Path
 from datetime import date
 
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from db import get_conn
 
-
 BASE_DIR = Path(__file__).resolve().parent
-
-app = FastAPI(title="J&T SLA Dashboard")
-
-app.mount(
-    "/static",
-    StaticFiles(directory=BASE_DIR / "static"),
-    name="static",
-)
-
+app = FastAPI(title="J&T SLA Regional — Resumo Oficial")
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
+
+# Fonte UNICA da Visao Geral: Resumo consolidado por data e codigo da base.
+# A tabela 'entregas' (remessas) nao participa de nenhuma consulta deste painel.
+FONTE = "public.sla_resumo_diario"
+META_DIARIA = 0.95
+META_MENSAL = 0.97
 
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={},
-    )
+    return templates.TemplateResponse(request=request, name="index.html", context={})
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "fonte": FONTE}
 
 
-# Correcao de gestao exibida sem reescrever historico operacional do PostgreSQL.
-BASE_TCM_SQL = "UPPER(BTRIM(COALESCE(base_entrega, ''))) = 'F TCM-PA'"
-FOCAL_COORD_SQL = f"""
-CASE WHEN {BASE_TCM_SQL} THEN 'FERNANDO SILVA OLIVEIRA'
-     ELSE NULLIF(BTRIM(coordenador), '') END
-"""
-FOCAL_SUP_SQL = f"""
-CASE WHEN {BASE_TCM_SQL} THEN NULL
-     ELSE NULLIF(BTRIM(supervisor), '') END
-"""
-# Mostrar os gestores como focais, sem diferenciar seus cargos.
-# Preserva ambos quando coordenador e supervisor sao pessoas diferentes.
-FOCAL_SQL = f"""
-CASE WHEN {BASE_TCM_SQL} THEN 'FERNANDO SILVA OLIVEIRA'
-     ELSE NULLIF(CONCAT_WS(' / ',
-         NULLIF(BTRIM(coordenador), ''),
-         CASE WHEN BTRIM(coordenador) = BTRIM(supervisor) THEN NULL
-              ELSE NULLIF(BTRIM(supervisor), '') END
-     ), '') END
-"""
-# Um gestor pode ser coordenador em uma base e supervisor em outra.
-# O filtro precisa abranger ambos, mas F TCM-PA pertence apenas ao Fernando.
-FOCAL_MATCH_SQL = f"""
-CASE WHEN {BASE_TCM_SQL} THEN ('FERNANDO SILVA OLIVEIRA' = %s)
-     ELSE (coordenador = %s OR supervisor = %s) END
-"""
+def consultar(sql: str, params=None):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params or [])
+            return cur.fetchall()
 
 
-def montar_filtros(
-    data_inicio: date | None = None,
-    data_fim: date | None = None,
-    responsavel: str | None = None,
-    rm: str | None = None,
-    base: str | None = None,
-):
-    where = ["1=1"]
+def tabela_pronta() -> bool:
+    """Nunca utilizar a base antiga como fallback silencioso."""
+    rows = consultar(
+        "SELECT to_regclass('public.sla_resumo_diario') IS NOT NULL"
+    )
+    return bool(rows and rows[0][0])
+
+
+def filtros_sql(data_inicio=None, data_fim=None, responsavel=None, rm=None, base=None):
+    filtros = ["1=1"]
     params = []
-
     if data_inicio:
-        where.append("data_sla >= %s")
+        filtros.append("data_sla >= %s")
         params.append(data_inicio)
-
     if data_fim:
-        where.append("data_sla <= %s")
+        filtros.append("data_sla <= %s")
         params.append(data_fim)
-
     if responsavel:
-        where.append(f"({FOCAL_MATCH_SQL})")
-        params.extend([responsavel, responsavel, responsavel])
-
+        filtros.append("sc = %s")
+        params.append(responsavel)
     if rm:
-        where.append("rm = %s")
+        filtros.append("rm = %s")
         params.append(rm)
-
     if base:
-        where.append("base_entrega = %s")
+        filtros.append("base_entrega = %s")
         params.append(base)
+    return " AND ".join(filtros), params
 
-    return " AND ".join(where), params
+
+def taxa(no_prazo, a_entregar):
+    """Razao de somas (N/K), jamais media simples de percentuais."""
+    total = int(a_entregar or 0)
+    if total <= 0:
+        return None
+    return float(no_prazo or 0) / total
+
+
+def data_iso(v):
+    return v.isoformat() if hasattr(v, "isoformat") else (str(v) if v else None)
+
+
+def sem_resumo():
+    return {
+        "data_min": None, "data_max": None, "responsaveis": [],
+        "rms": [], "bases": [], "fonte": "sla_resumo_diario",
+        "disponivel": False
+    }
 
 
 @app.get("/api/filtros")
 def filtros():
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT MIN(data_sla), MAX(data_sla)
-                FROM entregas
-                WHERE data_sla IS NOT NULL;
-                """
-            )
-            datas = cur.fetchone()
-
-            cur.execute(f"""
-                SELECT nome AS responsavel
-                FROM (
-                    SELECT {FOCAL_COORD_SQL} AS nome FROM entregas
-                    UNION
-                    SELECT {FOCAL_SUP_SQL} AS nome FROM entregas
-                ) AS focais
-                WHERE nome IS NOT NULL
-                ORDER BY responsavel;
-            """)
-            responsaveis = [row[0] for row in cur.fetchall()]
-
-            cur.execute(
-                """
-                SELECT DISTINCT rm
-                FROM entregas
-                WHERE rm IS NOT NULL
-                  AND TRIM(rm) <> ''
-                ORDER BY rm;
-                """
-            )
-            rms = [row[0] for row in cur.fetchall()]
-
-            cur.execute(
-                """
-                SELECT DISTINCT base_entrega
-                FROM entregas
-                WHERE base_entrega IS NOT NULL
-                  AND TRIM(base_entrega) <> ''
-                ORDER BY base_entrega;
-                """
-            )
-            bases = [row[0] for row in cur.fetchall()]
-
+    if not tabela_pronta():
+        return sem_resumo()
+    datas = consultar(f"SELECT MIN(data_sla), MAX(data_sla) FROM {FONTE}")[0]
+    focais = consultar(f"""
+        SELECT DISTINCT sc FROM {FONTE}
+        WHERE sc IS NOT NULL AND BTRIM(sc) <> ''
+        ORDER BY sc
+    """)
+    rms = consultar(f"""
+        SELECT DISTINCT rm FROM {FONTE}
+        WHERE rm IS NOT NULL AND BTRIM(rm) <> ''
+        ORDER BY rm
+    """)
+    bases = consultar(f"""
+        SELECT DISTINCT base_entrega FROM {FONTE}
+        WHERE base_entrega IS NOT NULL AND BTRIM(base_entrega) <> ''
+        ORDER BY base_entrega
+    """)
     return {
-        "data_min": datas[0].isoformat() if datas and datas[0] else None,
-        "data_max": datas[1].isoformat() if datas and datas[1] else None,
-        "responsaveis": responsaveis,
-        "rms": rms,
-        "bases": bases,
+        "data_min": data_iso(datas[0]),
+        "data_max": data_iso(datas[1]),
+        "responsaveis": [r[0] for r in focais],
+        "rms": [r[0] for r in rms],
+        "bases": [r[0] for r in bases],
+        "fonte": "sla_resumo_diario",
+        "disponivel": datas[1] is not None,
     }
 
 
 @app.get("/api/kpis")
 def kpis(
-    data_inicio: date | None = None,
-    data_fim: date | None = None,
-    responsavel: str | None = None,
-    rm: str | None = None,
-    base: str | None = None,
+    data_inicio: date | None = None, data_fim: date | None = None,
+    responsavel: str | None = None, rm: str | None = None, base: str | None = None
 ):
-    where, params = montar_filtros(
-        data_inicio,
-        data_fim,
-        responsavel,
-        rm,
-        base,
-    )
-
-    sql = f"""
+    vazio = {
+        "total_pedidos": 0, "no_prazo": 0, "fora_prazo": 0,
+        "entregue_fora_prazo": 0, "nao_entregue": 0,
+        "qtd_outros": 0, "sla": None, "meta_diaria": META_DIARIA,
+        "meta_mensal": META_MENSAL, "fonte": "sla_resumo_diario"
+    }
+    if not tabela_pronta():
+        return vazio
+    where, params = filtros_sql(data_inicio, data_fim, responsavel, rm, base)
+    row = consultar(f"""
         SELECT
-            COUNT(*)::bigint AS total_pedidos,
-            COUNT(*) FILTER (WHERE no_prazo)::bigint AS no_prazo,
-            COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-            COUNT(*) FILTER (
-                WHERE status_sla = 'Entregue fora do prazo'
-            )::bigint AS entregue_fora_prazo,
-            COUNT(*) FILTER (
-                WHERE status_sla = 'Não entregue'
-            )::bigint AS nao_entregue,
-            COALESCE(
-                AVG(
-                    CASE
-                        WHEN no_prazo THEN 1.0
-                        ELSE 0.0
-                    END
-                ),
-                0
-            ) AS sla
-        FROM entregas
-        WHERE {where};
-    """
-
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            row = cur.fetchone()
-
+            COALESCE(SUM(qtd_a_entregar), 0)::bigint,
+            COALESCE(SUM(qtd_no_prazo), 0)::bigint,
+            COALESCE(SUM(qtd_atraso), 0)::bigint,
+            COALESCE(SUM(qtd_outros), 0)::bigint
+        FROM {FONTE} WHERE {where}
+    """, params)[0]
+    k,n,p,outros = [int(v or 0) for v in row]
     return {
-        "total_pedidos": row[0],
-        "no_prazo": row[1],
-        "fora_prazo": row[2],
-        "entregue_fora_prazo": row[3],
-        "nao_entregue": row[4],
-        "sla": float(row[5] or 0),
-        "meta_diaria": 0.95,
-        "meta_mensal": 0.97,
+        "total_pedidos": k, "no_prazo": n,
+        "fora_prazo": p, "entregue_fora_prazo": p,
+        "nao_entregue": outros, "qtd_outros": outros,
+        "sla": taxa(n,k), "meta_diaria": META_DIARIA,
+        "meta_mensal": META_MENSAL, "fonte": "sla_resumo_diario"
     }
 
 
 @app.get("/api/sla-diario")
 def sla_diario(
-    data_inicio: date | None = None,
-    data_fim: date | None = None,
-    responsavel: str | None = None,
-    rm: str | None = None,
-    base: str | None = None,
+    data_inicio: date | None = None, data_fim: date | None = None,
+    responsavel: str | None = None, rm: str | None = None, base: str | None = None
 ):
-    where, params = montar_filtros(
-        data_inicio,
-        data_fim,
-        responsavel,
-        rm,
-        base,
-    )
-
-    sql = f"""
-        SELECT
-            data_sla,
-            COUNT(*)::bigint AS pedidos,
-            COUNT(*) FILTER (WHERE no_prazo)::bigint AS no_prazo,
-            COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-            AVG(
-                CASE
-                    WHEN no_prazo THEN 1.0
-                    ELSE 0.0
-                END
-            ) AS sla
-        FROM entregas
+    if not tabela_pronta():
+        return []
+    where, params = filtros_sql(data_inicio, data_fim, responsavel, rm, base)
+    rows = consultar(f"""
+        SELECT data_sla,
+               SUM(qtd_a_entregar)::bigint,
+               SUM(qtd_no_prazo)::bigint,
+               SUM(qtd_atraso)::bigint
+        FROM {FONTE}
         WHERE {where}
-          AND data_sla IS NOT NULL
         GROUP BY data_sla
-        ORDER BY data_sla;
-    """
-
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            rows = cur.fetchall()
-
+        HAVING SUM(qtd_a_entregar) > 0
+        ORDER BY data_sla
+    """, params)
     return [
-        {
-            "data_sla": row[0].isoformat() if row[0] else None,
-            "pedidos": row[1],
-            "no_prazo": row[2],
-            "fora_prazo": row[3],
-            "sla": float(row[4] or 0),
-        }
-        for row in rows
+        {"data_sla": data_iso(d), "pedidos": int(k), "no_prazo": int(n),
+         "fora_prazo": int(p), "sla": taxa(n,k)}
+        for d,k,n,p in rows
     ]
 
 
 @app.get("/api/sla-rm")
 def sla_rm(
-    data_inicio: date | None = None,
-    data_fim: date | None = None,
-    responsavel: str | None = None,
-    rm: str | None = None,
-    base: str | None = None,
+    data_inicio: date | None = None, data_fim: date | None = None,
+    responsavel: str | None = None, rm: str | None = None, base: str | None = None
 ):
-    where, params = montar_filtros(
-        data_inicio,
-        data_fim,
-        responsavel,
-        rm,
-        base,
-    )
-
-    sql = f"""
-        SELECT
-            rm,
-            COUNT(*)::bigint AS pedidos,
-            COUNT(*) FILTER (WHERE no_prazo)::bigint AS no_prazo,
-            COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-            AVG(
-                CASE
-                    WHEN no_prazo THEN 1.0
-                    ELSE 0.0
-                END
-            ) AS sla
-        FROM entregas
-        WHERE {where}
-          AND rm IS NOT NULL
-          AND TRIM(rm) <> ''
+    if not tabela_pronta():
+        return []
+    where, params = filtros_sql(data_inicio, data_fim, responsavel, rm, base)
+    rows = consultar(f"""
+        SELECT rm,
+               SUM(qtd_a_entregar)::bigint,
+               SUM(qtd_no_prazo)::bigint,
+               SUM(qtd_atraso)::bigint
+        FROM {FONTE}
+        WHERE {where} AND rm IS NOT NULL AND BTRIM(rm) <> ''
         GROUP BY rm
-        ORDER BY sla ASC, pedidos DESC;
-    """
-
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            rows = cur.fetchall()
-
+        HAVING SUM(qtd_a_entregar) > 0
+        ORDER BY (SUM(qtd_no_prazo)::numeric/NULLIF(SUM(qtd_a_entregar),0)) ASC
+    """, params)
     return [
-        {
-            "rm": row[0],
-            "pedidos": row[1],
-            "no_prazo": row[2],
-            "fora_prazo": row[3],
-            "sla": float(row[4] or 0),
-        }
-        for row in rows
+        {"rm": nome, "pedidos": int(k), "no_prazo": int(n),
+         "fora_prazo": int(p), "sla": taxa(n,k)}
+        for nome,k,n,p in rows
     ]
 
 
 @app.get("/api/piores-responsaveis")
 def piores_responsaveis(
     limit: int = Query(15, ge=1, le=100),
-    data_inicio: date | None = None,
-    data_fim: date | None = None,
-    responsavel: str | None = None,
-    rm: str | None = None,
-    base: str | None = None,
+    data_inicio: date | None = None, data_fim: date | None = None,
+    responsavel: str | None = None, rm: str | None = None, base: str | None = None
 ):
-    where, params = montar_filtros(data_inicio, data_fim, responsavel, rm, base)
-    sql = f"""
-        WITH dados AS (
-            SELECT {FOCAL_COORD_SQL} AS focal, no_prazo
-            FROM entregas
-            WHERE {where}
-            UNION ALL
-            SELECT {FOCAL_SUP_SQL} AS focal, no_prazo
-            FROM entregas
-            WHERE {where}
-        )
-        SELECT focal AS responsavel,
-               'Focal'::text AS funcao,
-               COUNT(*)::bigint AS pedidos,
-               COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-               AVG(CASE WHEN no_prazo THEN 1.0 ELSE 0.0 END) AS sla
-        FROM dados
-        WHERE focal IS NOT NULL
-        GROUP BY focal
-        ORDER BY sla ASC, fora_prazo DESC, pedidos DESC
-        LIMIT %s;
-    """
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params + params + [limit])
-            rows = cur.fetchall()
+    if not tabela_pronta():
+        return []
+    where, params = filtros_sql(data_inicio, data_fim, responsavel, rm, base)
+    rows = consultar(f"""
+        SELECT sc,
+               SUM(qtd_a_entregar)::bigint,
+               SUM(qtd_no_prazo)::bigint,
+               SUM(qtd_atraso)::bigint
+        FROM {FONTE}
+        WHERE {where} AND sc IS NOT NULL AND BTRIM(sc) <> ''
+        GROUP BY sc
+        HAVING SUM(qtd_a_entregar) > 0
+        ORDER BY (SUM(qtd_no_prazo)::numeric/NULLIF(SUM(qtd_a_entregar),0)) ASC,
+                 SUM(qtd_atraso) DESC, SUM(qtd_a_entregar) DESC
+        LIMIT %s
+    """, params + [limit])
     return [
-        {
-            "responsavel": row[0],
-            "funcao": row[1],
-            "pedidos": row[2],
-            "fora_prazo": row[3],
-            "sla": float(row[4] or 0),
-        }
-        for row in rows
+        {"responsavel": sc, "funcao": "Focal", "pedidos": int(k),
+         "fora_prazo": int(p), "no_prazo": int(n), "sla": taxa(n,k)}
+        for sc,k,n,p in rows
+    ]
+
+
+def consulta_bases(where, limit=None):
+    limite_sql = " LIMIT %s" if limit is not None else ""
+    return f"""
+        SELECT
+            codigo_base,
+            (ARRAY_AGG(base_entrega ORDER BY data_sla DESC))[1] AS base_entrega,
+            (ARRAY_AGG(rm ORDER BY data_sla DESC))[1] AS rm,
+            (ARRAY_AGG(sc ORDER BY data_sla DESC))[1] AS focal,
+            SUM(qtd_a_entregar)::bigint AS pedidos,
+            SUM(qtd_no_prazo)::bigint AS no_prazo,
+            SUM(qtd_atraso)::bigint AS fora_prazo
+        FROM {FONTE}
+        WHERE {where}
+        GROUP BY codigo_base
+        HAVING SUM(qtd_a_entregar) > 0
+        ORDER BY
+            (SUM(qtd_no_prazo)::numeric/NULLIF(SUM(qtd_a_entregar),0)) ASC,
+            SUM(qtd_atraso) DESC, SUM(qtd_a_entregar) DESC
+        {limite_sql}
+    """
+
+
+def organizar_bases(rows):
+    return [
+        {"codigo_base": codigo, "base_entrega": base, "rm": rm,
+         "focal": focal, "pedidos": int(k), "no_prazo": int(n),
+         "fora_prazo": int(p), "sla": taxa(n,k)}
+        for codigo,base,rm,focal,k,n,p in rows
     ]
 
 
 @app.get("/api/piores-bases")
 def piores_bases(
     limit: int = Query(20, ge=1, le=200),
-    data_inicio: date | None = None,
-    data_fim: date | None = None,
-    responsavel: str | None = None,
-    rm: str | None = None,
-    base: str | None = None,
+    data_inicio: date | None = None, data_fim: date | None = None,
+    responsavel: str | None = None, rm: str | None = None, base: str | None = None
 ):
-    where, params = montar_filtros(data_inicio, data_fim, responsavel, rm, base)
-    sql = f"""
-        WITH dados AS (
-            SELECT codigo_base, base_entrega, {FOCAL_SQL} AS focal, no_prazo
-            FROM entregas
-            WHERE {where}
-        )
-        SELECT codigo_base,
-               base_entrega,
-               focal,
-               COUNT(*)::bigint AS pedidos,
-               COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-               AVG(CASE WHEN no_prazo THEN 1.0 ELSE 0.0 END) AS sla
-        FROM dados
-        GROUP BY codigo_base, base_entrega, focal
-        ORDER BY sla ASC, fora_prazo DESC, pedidos DESC
-        LIMIT %s;
-    """
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params + [limit])
-            rows = cur.fetchall()
-    return [
-        {
-            "codigo_base": row[0],
-            "base_entrega": row[1],
-            "focal": row[2],
-            "pedidos": row[3],
-            "fora_prazo": row[4],
-            "sla": float(row[5] or 0),
-        }
-        for row in rows
-    ]
-
-
-@app.get("/api/piores-entregadores")
-def piores_entregadores(
-    limit: int = Query(50, ge=1, le=5000),
-    data_inicio: date | None = None,
-    data_fim: date | None = None,
-    responsavel: str | None = None,
-    rm: str | None = None,
-    base: str | None = None,
-):
-    where, params = montar_filtros(
-        data_inicio,
-        data_fim,
-        responsavel,
-        rm,
-        base,
-    )
-
-    sql_total = f"""
-        SELECT COUNT(*)
-        FROM (
-            SELECT entregador
-            FROM entregas
-            WHERE {where}
-              AND entregador IS NOT NULL
-              AND TRIM(entregador) <> ''
-            GROUP BY entregador
-        ) t;
-    """
-
-    sql = f"""
-        SELECT
-            codigo_base,
-            base_entrega,
-            entregador,
-
-            COUNT(*) FILTER (
-                WHERE status_sla = 'No prazo'
-            )::bigint AS no_prazo,
-
-            COUNT(*) FILTER (
-                WHERE status_sla = 'Não entregue'
-            )::bigint AS nao_entregue,
-
-            COUNT(*) FILTER (
-                WHERE status_sla = 'Entregue fora do prazo'
-            )::bigint AS fora_prazo,
-
-            COUNT(*)::bigint AS total,
-
-            AVG(
-                CASE
-                    WHEN no_prazo THEN 1.0
-                    ELSE 0.0
-                END
-            ) AS sla
-
-        FROM entregas
-
-        WHERE {where}
-          AND entregador IS NOT NULL
-          AND TRIM(entregador) <> ''
-
-        GROUP BY
-            codigo_base,
-            base_entrega,
-            entregador
-
-        ORDER BY
-            sla ASC,
-            nao_entregue DESC,
-            fora_prazo DESC,
-            total DESC,
-            entregador ASC
-
-        LIMIT %s;
-    """
-
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql_total, params)
-            total_entregadores = cur.fetchone()[0]
-
-            cur.execute(sql, params + [limit])
-            rows = cur.fetchall()
-
-    return {
-        "total_entregadores": total_entregadores,
-        "limite": limit,
-        "itens": [
-            {
-                "codigo_base": row[0],
-                "base_entrega": row[1],
-                "entregador": row[2],
-                "no_prazo": row[3],
-                "nao_entregue": row[4],
-                "fora_prazo": row[5],
-                "total": row[6],
-                "sla": float(row[7] or 0),
-            }
-            for row in rows
-        ],
-    }
-
-
-
-@app.get("/api/entregadores-detalhes")
-def entregadores_detalhes(
-    data_inicio: date | None = None,
-    data_fim: date | None = None,
-    responsavel: str | None = None,
-    rm: str | None = None,
-    base: str | None = None,
-):
-    where, params = montar_filtros(
-        data_inicio,
-        data_fim,
-        responsavel,
-        rm,
-        base,
-    )
-
-    sql = f"""
-        SELECT
-            codigo_base,
-            base_entrega,
-            entregador,
-            numero_remessa,
-            status_sla,
-            no_prazo,
-            data_sla
-        FROM entregas
-        WHERE {where}
-          AND entregador IS NOT NULL
-          AND TRIM(entregador) <> ''
-        ORDER BY
-            entregador ASC,
-            data_sla ASC,
-            numero_remessa ASC;
-    """
-
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            rows = cur.fetchall()
-
-    return [
-        {
-            "codigo_base": row[0],
-            "base_entrega": row[1],
-            "entregador": row[2],
-            "numero_remessa": row[3],
-            "status_sla": row[4],
-            "no_prazo": bool(row[5]),
-            "data_sla": row[6].isoformat() if row[6] else None,
-        }
-        for row in rows
-    ]
-
-
-
-@app.get("/api/entregadores-csv")
-def entregadores_csv(
-    data_inicio: date | None = None,
-    data_fim: date | None = None,
-    responsavel: str | None = None,
-    rm: str | None = None,
-    base: str | None = None,
-):
-    where, params = montar_filtros(
-        data_inicio,
-        data_fim,
-        responsavel,
-        rm,
-        base,
-    )
-
-    # numero_remessa é o Número da Remessa da coluna A do Excel,
-    # salvo individualmente no banco, uma linha por pacote.
-    sql = f"""
-        SELECT
-            numero_remessa,
-            base_entrega,
-            entregador,
-            data_sla,
-            status_sla
-        FROM entregas
-        WHERE {where}
-          AND numero_remessa IS NOT NULL
-          AND TRIM(numero_remessa) <> ''
-          AND entregador IS NOT NULL
-          AND TRIM(entregador) <> ''
-        ORDER BY
-            entregador ASC,
-            data_sla ASC,
-            numero_remessa ASC;
-    """
-
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            rows = cur.fetchall()
-
-    def csv_field(value):
-        text = "" if value is None else str(value)
-        return '"' + text.replace('"', '""') + '"'
-
-    linhas = [
-        ";".join([
-            csv_field("Número da Remessa"),
-            csv_field("Base"),
-            csv_field("Entregador"),
-            csv_field("Data SLA"),
-            csv_field("Status SLA"),
-        ])
-    ]
-
-    for numero_remessa, base_entrega, entregador, data_sla, status_sla in rows:
-        linhas.append(
-            ";".join([
-                csv_field(numero_remessa),
-                csv_field(base_entrega),
-                csv_field(entregador),
-                csv_field(data_sla.isoformat() if data_sla else ""),
-                csv_field(status_sla),
-            ])
-        )
-
-    conteudo = "\ufeff" + "\r\n".join(linhas)
-
-    if data_inicio and data_fim and data_inicio == data_fim:
-        nome = f"entregadores_remessas_{data_inicio.isoformat()}.csv"
-    elif data_inicio and data_fim:
-        nome = (
-            f"entregadores_remessas_"
-            f"{data_inicio.isoformat()}_a_{data_fim.isoformat()}.csv"
-        )
-    else:
-        nome = "entregadores_remessas.csv"
-
-    return Response(
-        content=conteudo,
-        media_type="text/csv; charset=utf-8",
-        headers={
-            "Content-Disposition": f'attachment; filename="{nome}"'
-        },
+    if not tabela_pronta():
+        return []
+    where, params = filtros_sql(data_inicio, data_fim, responsavel, rm, base)
+    return organizar_bases(
+        consultar(consulta_bases(where, limit), params + [limit])
     )
 
 
 @app.get("/api/ranking-bases")
 def ranking_bases(
-    data_inicio: date | None = None,
-    data_fim: date | None = None,
-    responsavel: str | None = None,
-    rm: str | None = None,
-    base: str | None = None,
+    data_inicio: date | None = None, data_fim: date | None = None,
+    responsavel: str | None = None, rm: str | None = None, base: str | None = None
 ):
-    where, params = montar_filtros(data_inicio, data_fim, responsavel, rm, base)
-    sql = f"""
-        WITH dados AS (
-            SELECT codigo_base, base_entrega, rm, {FOCAL_SQL} AS focal, no_prazo
-            FROM entregas
-            WHERE {where}
-        )
-        SELECT codigo_base,
-               base_entrega,
-               rm,
-               focal,
-               COUNT(*)::bigint AS pedidos,
-               COUNT(*) FILTER (WHERE NOT no_prazo)::bigint AS fora_prazo,
-               AVG(CASE WHEN no_prazo THEN 1.0 ELSE 0.0 END) AS sla
-        FROM dados
-        GROUP BY codigo_base, base_entrega, rm, focal
-        ORDER BY sla ASC, fora_prazo DESC, pedidos DESC;
-    """
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            rows = cur.fetchall()
-    return [
-        {
-            "codigo_base": row[0],
-            "base_entrega": row[1],
-            "rm": row[2],
-            "focal": row[3],
-            "pedidos": row[4],
-            "fora_prazo": row[5],
-            "sla": float(row[6] or 0),
-        }
-        for row in rows
-    ]
+    if not tabela_pronta():
+        return []
+    where, params = filtros_sql(data_inicio, data_fim, responsavel, rm, base)
+    return organizar_bases(consultar(consulta_bases(where), params))

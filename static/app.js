@@ -2,8 +2,7 @@ const nf = new Intl.NumberFormat("pt-BR");
 
 let chartDiario = null;
 let chartRm = null;
-let exibindoTodosEntregadores = false;
-let cacheTodosEntregadores = [];
+let chartComposicao = null;
 
 Chart.defaults.font.family = 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 Chart.defaults.color = "#667085";
@@ -45,8 +44,9 @@ function definirDataPadraoOntem() {
 
   const valor = dataLocalISO(ontem);
 
-  document.getElementById("dataInicio").value = valor;
-  document.getElementById("dataFim").value = valor;
+  const dataDisponivel = window.slaUltimaDataDisponivel || valor;
+  document.getElementById("dataInicio").value = dataDisponivel;
+  document.getElementById("dataFim").value = dataDisponivel;
 }
 
 async function getJSON(url) {
@@ -84,6 +84,14 @@ function montarQuery() {
 
 async function carregarOpcoesFiltros() {
   const data = await getJSON("/api/filtros");
+  window.slaUltimaDataDisponivel = data.data_max || null;
+  const status = document.getElementById("fonteResumo");
+  if (status) {
+    status.textContent = data.disponivel
+      ? `Fonte: Resumo JMS • disponível de ${data.data_min} até ${data.data_max} • atualizado por reimportação de 15 dias`
+      : "SLA Resumo ainda não carregado no PostgreSQL. Execute a primeira carga antes de consultar o indicador.";
+    status.classList.toggle("fonte-vazia", !data.disponivel);
+  }
 
   const selectResponsavel = document.getElementById("responsavel");
   selectResponsavel.innerHTML = '<option value="">Todos</option>';
@@ -119,10 +127,35 @@ async function carregarOpcoesFiltros() {
 async function carregarKPIs() {
   const data = await getJSON(`/api/kpis${montarQuery()}`);
 
-  document.getElementById("slaGeral").textContent = pct(data.sla);
+  document.getElementById("slaGeral").textContent = data.sla == null ? "Sem dados" : pct(data.sla);
   document.getElementById("totalPedidos").textContent = nf.format(data.total_pedidos || 0);
   document.getElementById("noPrazo").textContent = nf.format(data.no_prazo || 0);
   document.getElementById("foraPrazo").textContent = nf.format(data.fora_prazo || 0);
+  const outros = document.getElementById("qtdOutros");
+  if (outros) outros.textContent = nf.format(data.qtd_outros || 0);
+  if (chartComposicao) chartComposicao.destroy();
+  const total = Number(data.total_pedidos || 0);
+  chartComposicao = new Chart(document.getElementById("chartComposicao"), {
+    type: "doughnut",
+    data: {
+      labels: ["No prazo", "Com atraso", "Outros / pendentes"],
+      datasets: [{
+        data: [Number(data.no_prazo || 0), Number(data.fora_prazo || 0), Number(data.qtd_outros || 0)],
+        backgroundColor: ["#159455", "#d71920", "#abb4c2"],
+        borderWidth: 0,
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: "70%",
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: { callbacks: {
+          label: (context) => `${context.label}: ${nf.format(context.raw)} (${total ? (context.raw * 100 / total).toFixed(2).replace(".", ",") : "0,00"}%)`
+        } }
+      }
+    }
+  });
 }
 
 async function carregarDiario() {
@@ -179,16 +212,6 @@ async function carregarDiario() {
           },
           ticks: {
             callback: (valor) => `${valor}%`
-          }
-        },
-        yMeta: {
-          beginAtZero: true,
-          position: "right",
-          grid: {
-            drawOnChartArea: false
-          },
-          ticks: {
-            callback: (valor) => `${valor}d`
           }
         },
         x: {
@@ -324,43 +347,6 @@ async function carregarBases() {
   }).join("");
 }
 
-async function carregarEntregadores(limite = 50) {
-  const query = montarQuery();
-  const separador = query ? "&" : "?";
-
-  const resposta = await getJSON(
-    `/api/piores-entregadores${query}${separador}limit=${limite}`
-  );
-
-  const data = resposta.itens || [];
-  const total = Number(resposta.total_entregadores || 0);
-
-  document.getElementById("entregadoresResumo").textContent =
-    `${Math.min(limite, total)} de ${total} entregadores (menor SLA)`;
-
-  const tbody = document.getElementById("tbodyEntregadores");
-
-  tbody.innerHTML = data.map((item) => `
-    <tr>
-      <td>${item.base_entrega ?? item.codigo_base ?? ""}</td>
-      <td>${item.entregador ?? ""}</td>
-      <td>${nf.format(item.no_prazo || 0)}</td>
-      <td>${nf.format(item.nao_entregue || 0)}</td>
-      <td>${nf.format(item.fora_prazo || 0)}</td>
-      <td class="${classeSla(item.sla)}">${pct(item.sla)}</td>
-    </tr>
-  `).join("");
-
-  if (limite >= total && total > 0) {
-    exibindoTodosEntregadores = true;
-    cacheTodosEntregadores = data;
-    document.getElementById("btnVerTodosEntregadores").textContent = "Mostrar 50";
-  } else {
-    exibindoTodosEntregadores = false;
-    document.getElementById("btnVerTodosEntregadores").textContent = "Ver todos";
-  }
-}
-
 async function carregarRankingBases() {
   const data = await getJSON(`/api/ranking-bases${montarQuery()}`);
 
@@ -461,7 +447,6 @@ async function carregarDashboard() {
     carregarRm(),
     carregarResponsaveis(),
     carregarBases(),
-    carregarEntregadores(50),
     carregarRankingBases()
   ]);
 
@@ -502,79 +487,10 @@ document.getElementById("btnBaixarRanking").addEventListener("click", async () =
 });
 
 
-async function verTodosEntregadores() {
-  const botao = document.getElementById("btnVerTodosEntregadores");
-
-  try {
-    botao.disabled = true;
-
-    if (exibindoTodosEntregadores) {
-      await carregarEntregadores(50);
-    } else {
-      await carregarEntregadores(5000);
-    }
-  } catch (erro) {
-    console.error(erro);
-    alert("Erro ao carregar os entregadores.");
-  } finally {
-    botao.disabled = false;
-  }
-}
-
-async function baixarEntregadoresCSV() {
-  try {
-    const url = `/api/entregadores-csv${montarQuery()}`;
-
-    const response = await fetch(url, {
-      cache: "no-store"
-    });
-
-    if (!response.ok) {
-      throw new Error(`${response.status} - ${response.statusText}`);
-    }
-
-    const blob = await response.blob();
-
-    let nomeArquivo = "entregadores_remessas.csv";
-    const disposition = response.headers.get("Content-Disposition");
-
-    if (disposition) {
-      const match = disposition.match(/filename="([^"]+)"/);
-      if (match && match[1]) {
-        nomeArquivo = match[1];
-      }
-    }
-
-    const blobUrl = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-
-    link.href = blobUrl;
-    link.download = nomeArquivo;
-
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    URL.revokeObjectURL(blobUrl);
-
-  } catch (erro) {
-    console.error(erro);
-    alert("Erro ao baixar o CSV das remessas dos entregadores.");
-  }
-}
-
-document
-  .getElementById("btnVerTodosEntregadores")
-  .addEventListener("click", verTodosEntregadores);
-
-document
-  .getElementById("btnBaixarEntregadores")
-  .addEventListener("click", baixarEntregadoresCSV);
-
 async function iniciar() {
   try {
-    definirDataPadraoOntem();
     await carregarOpcoesFiltros();
+    definirDataPadraoOntem();
     await carregarDashboard();
   } catch (erro) {
     console.error(erro);

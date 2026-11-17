@@ -911,3 +911,28 @@ tbody tr:hover td:first-child {
 /* Ajuste específico do eixo percentual SLA por R/M */
 .dashboard-square .square-chart { overflow: visible; }
 #chartRm { overflow: visible; }
+
+
+/* Fonte oficial do indicador SLA Resumo */
+.fonte-resumo {
+  margin: 8px 0 18px;
+  padding: 11px 14px;
+  border-radius: 9px;
+  border: 1px solid #d6e3ef;
+  background: #f7fafc;
+  color: #475467;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.fonte-resumo.fonte-vazia {
+  border-color: #e5c5c5;
+  background: #fff8f8;
+  color: #961b1b;
+}
+.composicao-legenda {
+  color: #667085;
+  margin: 2px 14px 14px;
+  text-align: center;
+  font-size: 12px;
+}
+.composicao-legenda strong { color: #344054; }

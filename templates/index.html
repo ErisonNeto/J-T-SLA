@@ -7,7 +7,7 @@
   <title>J&T Express | SLA Regional</title>
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="/static/style.css?v=20261103-base-filter" />
+  <link rel="stylesheet" href="/static/style.css?v=20261117-resumo-oficial" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     @media (min-width: 1451px) {
@@ -88,6 +88,8 @@
       </div>
     </section>
 
+    <p id="fonteResumo" class="fonte-resumo" role="status" aria-live="polite">Carregando disponibilidade do SLA Resumo...</p>
+
     <section class="cards">
       <article class="card kpi-card kpi-primary">
         <div class="kpi-head">
@@ -104,7 +106,7 @@
           <span class="kpi-icon">∑</span>
         </div>
         <strong id="totalPedidos">--</strong>
-        <small>Remessas válidas analisadas</small>
+        <small>Quantidade a entregar • coluna K</small>
       </article>
 
       <article class="card kpi-card kpi-success">
@@ -113,16 +115,16 @@
           <span class="kpi-icon">✓</span>
         </div>
         <strong id="noPrazo">--</strong>
-        <small>Entregas dentro do SLA</small>
+        <small>Entregas no prazo • coluna N</small>
       </article>
 
       <article class="card kpi-card kpi-danger">
         <div class="kpi-head">
-          <span>Fora do prazo</span>
+          <span>Entregas com atraso</span>
           <span class="kpi-icon">!</span>
         </div>
         <strong id="foraPrazo">--</strong>
-        <small>Atrasos e remessas não entregues</small>
+        <small>Entregas com atraso • coluna P</small>
       </article>
     </section>
 
@@ -176,7 +178,7 @@
               <tr>
                 <th>Focal</th>
                 <th>Pedidos</th>
-                <th>Fora prazo</th>
+                <th>Com atraso</th>
                 <th>SLA</th>
               </tr>
             </thead>
@@ -201,7 +203,7 @@
                 <th>Base</th>
                 <th>Focal</th>
                 <th>Pedidos</th>
-                <th>Fora prazo</th>
+                <th>Com atraso</th>
                 <th>SLA</th>
               </tr>
             </thead>
@@ -210,39 +212,18 @@
         </div>
       </article>
 
-      <article class="panel dashboard-square entregadores-card">
-        <div class="panel-title entregadores-title">
+      <article class="panel dashboard-square">
+        <div class="panel-title">
           <div>
-            <span class="section-kicker">LAST MILE</span>
-            <h2>Entregadores com baixo desempenho</h2>
-            <span id="entregadoresResumo">50 entregadores com menor SLA</span>
+            <span class="section-kicker">COMPOSIÇÃO</span>
+            <h2>Status dos pacotes</h2>
+            <span>Colunas K, N e P do Resumo do JMS</span>
           </div>
         </div>
-
-        <div class="table-wrap square-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Base</th>
-                <th>Entregador</th>
-                <th>No prazo</th>
-                <th>Não entregou</th>
-                <th>Fora prazo</th>
-                <th>SLA</th>
-              </tr>
-            </thead>
-            <tbody id="tbodyEntregadores"></tbody>
-          </table>
+        <div class="chart-wrap square-chart">
+          <canvas id="chartComposicao"></canvas>
         </div>
-
-        <div class="entregadores-actions">
-          <button id="btnVerTodosEntregadores" class="btn btn-light btn-small" type="button">
-            Ver todos
-          </button>
-          <button id="btnBaixarEntregadores" class="btn btn-download btn-small" type="button">
-            Baixar CSV
-          </button>
-        </div>
+        <p class="composicao-legenda">Outros / pendentes: <strong id="qtdOutros">--</strong> pacotes (K − N − P)</p>
       </article>
 
     </section>
@@ -270,7 +251,7 @@
               <th>R/M</th>
               <th>Focal</th>
               <th>Pedidos</th>
-              <th>Fora do prazo</th>
+              <th>Com atraso</th>
               <th>SLA</th>
             </tr>
           </thead>
@@ -287,6 +268,6 @@
     </footer>
   </main>
 
-  <script src="/static/app.js?v=20261117-sem-aba-prazo"></script>
+  <script src="/static/app.js?v=20261117-resumo-oficial"></script>
 </body>
 </html>
