@@ -15,7 +15,19 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 # Fonte UNICA da Visao Geral: Resumo consolidado por data e codigo da base.
 # A tabela 'entregas' (remessas) nao participa de nenhuma consulta deste painel.
-FONTE = "public.sla_resumo_diario"
+# Gestão vigente no PostgreSQL, associada pelo código estável da estação.
+# A view tem uma única linha por estação e não multiplica as volumetrias.
+GESTAO = "jt_operacao.vw_gestao_colaboradores_atual"
+FONTE = f"""(
+    SELECT s.data_sla, s.codigo_base,
+           COALESCE(NULLIF(BTRIM(g.nome_base), ''), s.base_entrega) AS base_entrega,
+           COALESCE(NULLIF(BTRIM(g.responsavel_regiao), ''), s.rm) AS rm,
+           COALESCE(NULLIF(BTRIM(g.coordenador), ''),
+                    NULLIF(BTRIM(g.supervisor), ''), s.sc) AS sc,
+           s.qtd_a_entregar, s.qtd_no_prazo, s.qtd_atraso, s.qtd_outros
+    FROM public.sla_resumo_diario s
+    LEFT JOIN {GESTAO} g ON g.estacao_no = BTRIM(s.codigo_base::text)
+) AS sla_com_gestao"""
 META_DIARIA = 0.95
 META_MENSAL = 0.97
 
