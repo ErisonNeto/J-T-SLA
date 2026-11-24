@@ -27,7 +27,7 @@ function pct(valor) {
 }
 
 function classeSla(valor) {
-  return Number(valor || 0) >= 0.95 ? "sla-good" : "sla-bad";
+  return valor == null ? "sla-neutral" : Number(valor) >= 0.97 ? "sla-good" : Number(valor) >= 0.93 ? "sla-warning" : "sla-bad";
 }
 
 function dataLocalISO(data) {
@@ -127,6 +127,7 @@ async function carregarOpcoesFiltros() {
 async function carregarKPIs() {
   const data = await getJSON(`/api/kpis${montarQuery()}`);
 
+  document.getElementById("slaGeral").className = classeSla(data.sla);
   document.getElementById("slaGeral").textContent = data.sla == null ? "Sem dados" : pct(data.sla);
   document.getElementById("totalPedidos").textContent = nf.format(data.total_pedidos || 0);
   document.getElementById("noPrazo").textContent = nf.format(data.no_prazo || 0);
@@ -186,8 +187,8 @@ async function carregarDiario() {
           spanGaps: false
         },
         {
-          label: "Meta",
-          data: data.map(() => 95),
+          label: "Meta 97%",
+          data: data.map(() => 97),
           borderColor: "#159455",
           borderWidth: 1.5,
           pointRadius: 0,
