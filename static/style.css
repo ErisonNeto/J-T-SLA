@@ -937,5 +937,5 @@ tbody tr:hover td:first-child {
 }
 .composicao-legenda strong { color: #344054; }
 
-.sla-warning{color:#926000!important;background-color:#fff4cf;}
+.sla-warning{color:#b88600!important;font-weight:800;}
 .sla-neutral{color:#667085!important;}
